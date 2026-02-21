@@ -27,6 +27,7 @@ class TestConfig:
         assert config.language == "en"
         assert config.ui_language == "es"
         assert config.recording_device is None
+        assert config.model_size == "base"
 
     def test_validate_duration_valid(self):
         config = Config()

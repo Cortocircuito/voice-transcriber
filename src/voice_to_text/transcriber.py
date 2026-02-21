@@ -35,11 +35,15 @@ class TranscriptionError(TranscriberError):
 
 
 class Transcriber:
-    def __init__(self, model_size: str = "base", device: str = "cpu", compute_type: str = "int8"):
-        self.model_size = model_size
+    def __init__(self, model_size: Optional[str] = None, device: str = "cpu", compute_type: str = "int8"):
+        self._model_size = model_size
         self.device = device
         self.compute_type = compute_type
         self._model: Optional[WhisperModel] = None
+
+    @property
+    def model_size(self) -> str:
+        return self._model_size or "base"
 
     @property
     def model(self) -> WhisperModel:

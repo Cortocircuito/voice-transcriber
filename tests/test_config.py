@@ -13,6 +13,7 @@ class TestConfig:
         assert config.language == "en"
         assert config.ui_language == "es"
         assert config.recording_device is None
+        assert config.model_size == "base"
 
     def test_validate_duration_valid(self):
         config = Config()
@@ -33,6 +34,13 @@ class TestConfig:
         assert config.get_language_label() == "Inglés"
         config.language = "es"
         assert config.get_language_label() == "Español"
+
+    def test_get_model_label(self):
+        config = Config()
+        config.model_size = "tiny"
+        assert "tiny" in config.get_model_label()
+        config.model_size = "base"
+        assert "base" in config.get_model_label()
 
 
 class TestI18n:

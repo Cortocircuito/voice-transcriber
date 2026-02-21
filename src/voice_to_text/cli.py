@@ -7,7 +7,7 @@ from typing import Optional
 
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
-from .config import Config, SUPPORTED_LANGUAGES
+from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS
 from .i18n import get_text, get_language_label
 from .recorder import Recorder
 from .transcriber import Transcriber
@@ -18,7 +18,7 @@ class CLI:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.recorder = Recorder(self.config.recording_device)
-        self.transcriber = Transcriber()
+        self.transcriber = Transcriber(model_size=self.config.model_size)
         self.ui = UI(self.config)
         self._setup_signals()
 
@@ -48,6 +48,11 @@ class CLI:
                     self.config.language = lang_code
                     lang_label = get_language_label(lang_code, self.config.ui_language)
                     self.ui.show_success(lang_label)
+            elif choice == "3":
+                model_size = self.ui.show_model_selector()
+                if model_size:
+                    self.config.model_size = model_size
+                    self.ui.show_success(self.config.get_model_label())
             else:
                 break
 

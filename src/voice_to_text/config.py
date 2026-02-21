@@ -11,9 +11,17 @@ SUPPORTED_LANGUAGES: Dict[str, Tuple[str, str]] = {
     "4": ("de", "Alemán"),
 }
 
+SUPPORTED_MODELS: Dict[str, Tuple[str, str]] = {
+    "1": ("tiny", "≈75MB"),
+    "2": ("base", "≈150MB"),
+    "3": ("small", "≈500MB"),
+    "4": ("medium", "≈1.5GB"),
+}
+
 DEFAULT_DURATION = 15
 DEFAULT_LANGUAGE = "en"
 DEFAULT_UI_LANGUAGE = "es"
+DEFAULT_MODEL_SIZE = "base"
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MIN_DURATION = 1
@@ -27,6 +35,7 @@ class Config:
     language: str = DEFAULT_LANGUAGE
     ui_language: str = DEFAULT_UI_LANGUAGE
     recording_device: Optional[str] = DEFAULT_DEVICE
+    model_size: str = DEFAULT_MODEL_SIZE
 
     def validate_duration(self, value: str) -> int:
         try:
@@ -42,3 +51,9 @@ class Config:
             if code == self.language:
                 return label
         return self.language
+
+    def get_model_label(self) -> str:
+        for code, (model, size) in SUPPORTED_MODELS.items():
+            if model == self.model_size:
+                return f"{model} ({size})"
+        return self.model_size

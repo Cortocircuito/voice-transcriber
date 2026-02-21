@@ -158,11 +158,13 @@ class UI:
         """Show configuration menu and get choice."""
         lang = self.config.ui_language
         lang_label = get_language_label(self.config.language, lang)
+        model_label = self.config.get_model_label()
 
         items = [
             ("[1]", "⏱️", f"{get_text('config_duration', lang)} [{self.config.duration}s]"),
             ("[2]", "🌐", f"{get_text('config_language', lang)} [{lang_label}]"),
-            ("[3]", "←", get_text("menu_back", lang)),
+            ("[3]", "🧠", f"Model [{model_label}]"),
+            ("[4]", "←", get_text("menu_back", lang)),
         ]
 
         content = self._build_menu_content(items)
@@ -174,7 +176,33 @@ class UI:
             choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
-            return "3"
+            return "4"
+
+    def show_model_selector(self) -> Optional[str]:
+        """Show model selector and return selected model size."""
+        lang = self.config.ui_language
+
+        items = [
+            ("[1]", "🧠", f"tiny ({'≈75MB'})"),
+            ("[2]", "🧠", f"base ({'≈150MB'})"),
+            ("[3]", "🧠", f"small ({'≈500MB'})"),
+            ("[4]", "🧠", f"medium ({'≈1.5GB'})"),
+            ("[0]", "←", get_text("menu_back", lang)),
+        ]
+
+        content = self._build_menu_content(items)
+
+        console.print()
+        console.print(self._create_panel(content, border_style="cyan"))
+
+        try:
+            choice = console.input(f"[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+            if choice.strip() == "0":
+                return None
+            model_map = {"1": "tiny", "2": "base", "3": "small", "4": "medium"}
+            return model_map.get(choice.strip())
+        except (EOFError, KeyboardInterrupt):
+            return None
 
     def show_language_selector(self) -> Optional[str]:
         """Show language selector and return selected language code."""
