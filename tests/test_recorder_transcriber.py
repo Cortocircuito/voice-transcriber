@@ -105,6 +105,129 @@ class TestRecorder:
         recorder.interrupt()
         assert recorder._interrupted is True
 
+    @patch("voice_to_text.recorder.subprocess.Popen")
+    @patch("voice_to_text.recorder.os.path.getsize")
+    @patch("voice_to_text.recorder.os.path.exists")
+    @patch("voice_to_text.recorder.os.unlink")
+    def test_validate_prerecording_success(self, mock_unlink, mock_exists, mock_getsize, mock_popen):
+        mock_exists.return_value = True
+        mock_getsize.return_value = 64000
+
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_popen.return_value = mock_proc
+
+        recorder = Recorder(device="default")
+        success, message = recorder.validate_prerecording(test_duration=1)
+
+        assert success is True
+
+    @patch("voice_to_text.recorder.subprocess.Popen")
+    @patch("voice_to_text.recorder.os.path.exists")
+    @patch("voice_to_text.recorder.os.unlink")
+    def test_validate_prerecording_file_too_small(self, mock_unlink, mock_exists, mock_popen):
+        mock_exists.return_value = True
+
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_popen.return_value = mock_proc
+
+        with patch("voice_to_text.recorder.os.path.getsize", return_value=100):
+            recorder = Recorder(device="default")
+            success, message = recorder.validate_prerecording(test_duration=1)
+
+            assert success is False
+            assert "No audio detected" in message or "quiet" in message.lower()
+
+    @patch("voice_to_text.recorder.subprocess.Popen")
+    @patch("voice_to_text.recorder.os.path.exists")
+    @patch("voice_to_text.recorder.os.unlink")
+    def test_validate_prerecording_permission_denied(self, mock_unlink, mock_exists, mock_popen):
+        mock_exists.return_value = False
+
+        mock_proc = MagicMock()
+        mock_proc.returncode = 13
+        mock_proc.communicate.return_value = (b"", b"Permission denied")
+        mock_popen.return_value = mock_proc
+
+        recorder = Recorder(device="default")
+        success, message = recorder.validate_prerecording(test_duration=1)
+
+        assert success is False
+
+    @patch("voice_to_text.recorder.find_working_microphone")
+    @patch.object(Recorder, "validate_prerecording")
+    @patch("voice_to_text.recorder.os.path.getsize")
+    @patch("voice_to_text.recorder.os")
+    def test_record_with_validation_long_duration(self, mock_os, mock_getsize, mock_validate, mock_find):
+        mock_find.return_value = "default"
+        mock_validate.return_value = (True, "OK")
+        mock_getsize.return_value = 64000
+        mock_os.path.getsize.return_value = 64000
+        mock_os.path.exists.return_value = True
+
+        with patch("voice_to_text.recorder.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_popen.return_value = mock_proc
+
+            with patch("voice_to_text.recorder.subprocess.run") as mock_run:
+                mock_result = MagicMock()
+                mock_result.returncode = 0
+                mock_run.return_value = mock_result
+
+                recorder = Recorder()
+                result = recorder.record(duration=15)
+
+                assert result is not None
+
+    @patch("voice_to_text.recorder.find_working_microphone")
+    @patch("voice_to_text.recorder.os.path.getsize")
+    @patch("voice_to_text.recorder.os")
+    def test_record_short_duration_skips_validation(self, mock_os, mock_getsize, mock_find):
+        mock_find.return_value = "default"
+        mock_getsize.return_value = 64000
+        mock_os.path.getsize.return_value = 64000
+        mock_os.path.exists.return_value = True
+
+        with patch("voice_to_text.recorder.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_popen.return_value = mock_proc
+
+            with patch("voice_to_text.recorder.subprocess.run") as mock_run:
+                mock_result = MagicMock()
+                mock_result.returncode = 0
+                mock_run.return_value = mock_result
+
+                recorder = Recorder()
+                result = recorder.record(duration=5, validate_mic=False)
+
+                assert result is not None
+
+    @patch("voice_to_text.recorder.find_working_microphone")
+    @patch("voice_to_text.recorder.os.path.getsize")
+    @patch("voice_to_text.recorder.os")
+    def test_record_empty_file_returns_none(self, mock_os, mock_getsize, mock_find):
+        mock_find.return_value = "default"
+        mock_getsize.return_value = 0
+        mock_os.path.getsize.return_value = 0
+        mock_os.path.exists.return_value = True
+
+        with patch("voice_to_text.recorder.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_popen.return_value = mock_proc
+
+            with patch("voice_to_text.recorder.subprocess.run") as mock_run:
+                mock_result = MagicMock()
+                mock_result.returncode = 0
+                mock_run.return_value = mock_result
+
+                recorder = Recorder()
+                result = recorder.record(duration=1, validate_mic=False)
+
+                assert result is None
+
 
 class TestTranscriber:
     def test_init_default_params(self):
