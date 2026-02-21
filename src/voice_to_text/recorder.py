@@ -1,5 +1,6 @@
 """Audio recording functionality."""
 
+import logging
 import os
 import shutil
 import subprocess
@@ -10,6 +11,8 @@ import wave
 from typing import Callable, List, Optional, Tuple
 
 from .config import CHANNELS, SAMPLE_RATE
+
+logger = logging.getLogger(__name__)
 
 
 class RecorderError(Exception):
@@ -55,8 +58,8 @@ def detect_audio_devices() -> List[str]:
                         card_num = card_info.split()[1] if len(card_info.split()) > 1 else None
                         if card_num:
                             devices.append(f"hw:{card_num},0")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Error detecting audio devices: {e}")
     
     return devices
 
@@ -82,7 +85,8 @@ def find_working_microphone() -> Optional[str]:
             )
             if result.returncode == 0:
                 return device
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error testing device {device}: {e}")
             continue
     
     try:
@@ -101,8 +105,8 @@ def find_working_microphone() -> Optional[str]:
         )
         if result.returncode == 0:
             return "default"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Error testing default device: {e}")
     
     return None
 
@@ -153,8 +157,8 @@ class Recorder:
             return False, None
         except PermissionError:
             return False, None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error checking microphone: {e}")
         return False, None
 
     def validate_prerecording(self, test_duration: int = 2) -> Tuple[bool, str]:
@@ -218,8 +222,8 @@ class Recorder:
         finally:
             try:
                 os.unlink(test_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error cleaning up test file: {e}")
 
     def start_recording(self) -> Optional[str]:
         """Start recording and return audio path."""
@@ -329,12 +333,9 @@ class Recorder:
                     if samples:
                         max_sample = max(abs(s) for s in samples)
                         self._current_level = min(1.0, max_sample / 32768.0)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Error reading audio stream: {e}")
                 break
-
-    def _start_level_monitoring(self):
-        """Start the audio level monitoring thread."""
-        pass
 
     def _stop_level_monitoring(self):
         """Stop the audio level monitoring thread."""
@@ -342,7 +343,7 @@ class Recorder:
         if self._level_monitor_thread:
             self._level_monitor_thread.join(timeout=0.5)
             self._level_monitor_thread = None
-    
+
     def stop_recording(self) -> bool:
         """Stop recording and finalize WAV file."""
         self._stop_level_monitoring()
@@ -419,7 +420,8 @@ class Recorder:
             
             return audio_path
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Error during recording: {e}")
             self.stop_recording()
             return None
 

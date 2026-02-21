@@ -2,7 +2,7 @@
 
 import time
 import unicodedata
-from typing import Optional
+from typing import Any, Optional, Union
 
 from rich.align import Align
 from rich.box import ROUNDED
@@ -38,8 +38,9 @@ def _display_width(text: str) -> int:
 class UI:
     def __init__(self, config: Config):
         self.config = config
+        self.console = Console(color_system="auto", force_terminal=True)
 
-    def _create_panel(self, content: str, subtitle: str = "", border_style: str = "cyan") -> Panel:
+    def _create_panel(self, content: Union[str, Any], subtitle: str = "", border_style: str = "cyan") -> Panel:
         """Create a panel that expands to full console width."""
         return Panel(
             content,
