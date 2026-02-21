@@ -385,6 +385,7 @@ class CLI:
                 end_paragraph=end_para,
                 total_paragraphs=len(paragraphs),
                 estimated_duration=page_duration,
+                current_duration=self.config.duration,
             )
             
             if action == "back":

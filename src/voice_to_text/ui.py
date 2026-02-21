@@ -582,7 +582,7 @@ class UI:
             "",
             f"  [bold cyan]⏱️ {get_text('change_duration', lang)}[/bold cyan]",
             "",
-            f"  {get_text('current_duration', lang)}: {current_duration}s",
+            f"  {get_text('record_duration', lang)}: {current_duration}s",
             f"  {get_text('estimated_time', lang)}: {calculated_duration}s",
             "",
         ]
@@ -699,6 +699,7 @@ class UI:
         end_paragraph: int,
         total_paragraphs: int,
         estimated_duration: int,
+        current_duration: int,
     ) -> str:
         """Show a page with 1-2 paragraphs with navigation.
         
@@ -732,13 +733,15 @@ class UI:
             para_label = f"{get_text('paragraph', lang)} {start_paragraph}"
         else:
             para_label = f"{get_text('paragraphs', lang)} {start_paragraph}-{end_paragraph}"
+
+        current_duration_str = f"{current_duration}s"
         
         lines = [
             "",
             f"  [bold cyan]📖 {get_text('reading_mode', lang)} - {get_text('level', lang)} {level}[/bold cyan]",
             "",
             f"  [dim]{para_label} {get_text('of', lang)} {total_paragraphs}[/dim]",
-            f"  [dim]{get_text('estimated_time', lang)}: {time_str}[/dim]",
+            f"  [dim]{get_text('estimated_time', lang)}: {time_str}  │  {get_text('record_duration', lang)}: {current_duration_str}[/dim]",
             "",
             f"  [dim]{get_text('read_aloud', lang)}[/dim]",
             "",
