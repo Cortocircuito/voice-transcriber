@@ -79,6 +79,11 @@ TRANSLATIONS = {
     "seconds_short": "sec",
     "current_duration": "Current duration",
     "set_duration": "Set duration",
+    "paragraph": "Paragraph",
+    "next_paragraph": "Next paragraph",
+    "next_paragraph_short": "F",
+    "prev_paragraph": "Previous",
+    "lesson_complete": "Lesson Complete!",
 }
 
 

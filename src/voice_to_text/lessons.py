@@ -46,10 +46,20 @@ class Lesson:
     description: str
     levels: list[str]
     texts: dict[str, str]
+    level_urls: dict[str, str]
+    paragraphs: dict[str, list[str]]
     
     def get_text(self, level: str) -> Optional[str]:
         """Get the text for a specific level."""
         return self.texts.get(level)
+    
+    def get_paragraphs(self, level: str) -> list[str]:
+        """Get paragraphs for a specific level."""
+        return self.paragraphs.get(level, [])
+    
+    def get_level_url(self, level: str) -> Optional[str]:
+        """Get the URL for a specific level."""
+        return self.level_urls.get(level)
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -65,6 +75,8 @@ class Lesson:
             description=data.get("description", ""),
             levels=data.get("levels", []),
             texts=data.get("texts", {}),
+            level_urls=data.get("level_urls", {}),
+            paragraphs=data.get("paragraphs", {}),
         )
 
 
@@ -127,50 +139,118 @@ class LessonManager:
         lessons = []
         seen_urls = set()
         
-        patterns = [
-            r'<a[^>]+href="(\d{4}/\d{6}-[^"]+\.html)"[^>]*>([^<]+)</a>',
-            r'<article[^>]*>.*?<h3><a href="([^"]+\.html)"[^>]*>([^<]+)</a></h3>',
-            r'href="([^"]*\d{6}[^"]*\.html)"[^>]*>([^<]{20,}?)</a>',
-        ]
+        lesson_block_pattern = r'<div[^>]*class="lesson-excerpt[^"]*"[^>]*>(.*?)</div>\s*</div>'
         
-        for pattern in patterns:
-            for match in re.finditer(pattern, html, re.DOTALL | re.IGNORECASE):
-                url_path, title = match.groups()
-                
-                if not url_path.startswith('http'):
-                    if url_path.startswith('/'):
-                        full_url = BASE_URL + url_path
+        for block_match in re.finditer(lesson_block_pattern, html, re.DOTALL | re.IGNORECASE):
+            block = block_match.group(1)
+            
+            level_urls = {}
+            
+            level_links = re.findall(
+                r'<a[^>]+href="([^"]+)"[^>]*>Level\s*(\d+)</a>',
+                block,
+                re.IGNORECASE
+            )
+            
+            for url, level in level_links:
+                if not url.startswith('http'):
+                    url = BASE_URL + "/" + url
+                level_urls[level] = url
+            
+            main_link_match = re.search(r'<a[^>]+href="([^"]+\.html)"[^>]*title="([^"]+)"', block)
+            if not main_link_match:
+                continue
+            
+            url_path = main_link_match.group(1)
+            title = main_link_match.group(2)
+            
+            if not url_path.startswith('http'):
+                if url_path.startswith('/'):
+                    full_url = BASE_URL + url_path
+                else:
+                    full_url = BASE_URL + "/" + url_path
+            else:
+                full_url = url_path
+            
+            if not re.search(r'\d{6}-', full_url):
+                continue
+            
+            if full_url in seen_urls:
+                continue
+            
+            if not level_urls:
+                level_urls = {"3": full_url}
+            
+            seen_urls.add(full_url)
+            
+            date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})-', full_url)
+            if date_match:
+                year, month, day = date_match.groups()
+                date_str = f"{day}/{month}/{year[2:]}"
+            else:
+                date_str = ""
+            
+            title = re.sub(r'\s+', ' ', title).strip()
+            title = re.sub(r'^\s*-\s*', '', title)
+            
+            if len(title) < 10:
+                continue
+            
+            lessons.append({
+                "title": title,
+                "url": full_url,
+                "date": date_str,
+                "level_urls": level_urls,
+            })
+        
+        if not lessons:
+            patterns = [
+                r'<a[^>]+href="(\d{4}/\d{6}-[^"]+\.html)"[^>]*>([^<]+)</a>',
+                r'<article[^>]*>.*?<h3><a href="([^"]+\.html)"[^>]*>([^<]+)</a></h3>',
+                r'href="([^"]*\d{6}[^"]*\.html)"[^>]*>([^<]{20,}?)</a>',
+            ]
+            
+            for pattern in patterns:
+                for match in re.finditer(pattern, html, re.DOTALL | re.IGNORECASE):
+                    url_path, title = match.groups()
+                    
+                    if not url_path.startswith('http'):
+                        if url_path.startswith('/'):
+                            full_url = BASE_URL + url_path
+                        else:
+                            full_url = BASE_URL + "/" + url_path
                     else:
-                        full_url = BASE_URL + "/" + url_path
-                else:
-                    full_url = url_path
-                
-                if not re.search(r'\d{6}-', full_url):
-                    continue
-                
-                if full_url in seen_urls:
-                    continue
-                
-                seen_urls.add(full_url)
-                
-                date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})-', full_url)
-                if date_match:
-                    year, month, day = date_match.groups()
-                    date_str = f"{day}/{month}/{year[2:]}"
-                else:
-                    date_str = ""
-                
-                title = re.sub(r'\s+', ' ', title).strip()
-                title = re.sub(r'^\s*-\s*', '', title)
-                
-                if len(title) < 10:
-                    continue
-                
-                lessons.append({
-                    "title": title,
-                    "url": full_url,
-                    "date": date_str,
-                })
+                        full_url = url_path
+                    
+                    if not re.search(r'\d{6}-', full_url):
+                        continue
+                    
+                    if full_url in seen_urls:
+                        continue
+                    
+                    seen_urls.add(full_url)
+                    
+                    date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})-', full_url)
+                    if date_match:
+                        year, month, day = date_match.groups()
+                        date_str = f"{day}/{month}/{year[2:]}"
+                    else:
+                        date_str = ""
+                    
+                    title = re.sub(r'\s+', ' ', title).strip()
+                    title = re.sub(r'^\s*-\s*', '', title)
+                    
+                    if len(title) < 10:
+                        continue
+                    
+                    level_urls = {"3": full_url}
+                    
+                    lessons.append({
+                        "title": title,
+                        "url": full_url,
+                        "date": date_str,
+                        "level_urls": level_urls,
+                    })
         
         return lessons[:10]
     
@@ -250,6 +330,99 @@ class LessonManager:
         
         return ""
     
+    def _extract_paragraphs(self, html: str) -> list[str]:
+        """Extract paragraphs from the article content.
+        
+        Args:
+            html: HTML content
+            
+        Returns:
+            List of paragraph strings
+        """
+        article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL | re.IGNORECASE)
+        
+        if not article_match:
+            article_match = re.search(r'<div[^>]*id="[^"]*main[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE)
+        
+        if not article_match:
+            return []
+        
+        article_content = article_match.group(1)
+        
+        parts = re.split(r'<br\s*/?>\s*<br\s*/?>', article_content)
+        
+        paragraphs = []
+        
+        for part in parts:
+            text = re.sub(r'<[^>]+>', '', part)
+            text = re.sub(r'\s+', ' ', text)
+            text = text.strip()
+            
+            if len(text) < 20:
+                continue
+            
+            skip_patterns = [
+                'try the same news story', 'sources', 'make sure you try',
+                'paragraph', 'level', 'listen', 'fill', 'match',
+            ]
+            text_lower = text.lower()
+            if any(skip in text_lower for skip in skip_patterns):
+                continue
+            
+            paragraphs.append(text)
+        
+        if not paragraphs:
+            full_text = self._extract_reading_text(html)
+            if full_text:
+                paras = re.split(r'(?<=[.!?])\s+', full_text)
+                paragraphs = [p.strip() for p in paras if len(p.strip()) > 20]
+        
+        return paragraphs
+    
+    def _get_level_from_url(self, url: str) -> str:
+        """Extract level from URL.
+        
+        Args:
+            url: Lesson URL
+            
+        Returns:
+            Level string (0-6)
+        """
+        match = re.search(r'-(\d+)\.html$', url)
+        if match:
+            return match.group(1)
+        
+        return "3"
+    
+    def _fetch_level_content(self, base_info: dict, level: str) -> tuple[str, list[str], str]:
+        """Fetch content for a specific level.
+        
+        Args:
+            base_info: Base lesson info dict
+            level: Level to fetch
+            
+        Returns:
+            Tuple of (text, paragraphs, description)
+        """
+        level_urls = base_info.get("level_urls")
+        if isinstance(level_urls, dict):
+            url = level_urls.get(level, base_info["url"])
+        else:
+            url = base_info["url"]
+        
+        try:
+            html = self._fetch_url(url)
+            text = self._extract_reading_text(html)
+            paragraphs = self._extract_paragraphs(html)
+            description = self._extract_description(html)
+            
+            if not text and paragraphs:
+                text = " ".join(paragraphs)
+            
+            return text, paragraphs, description
+        except NetworkError:
+            return "", [], ""
+    
     def fetch_lessons(self, use_cache: bool = True) -> list[Lesson]:
         """Fetch lessons from website or cache.
         
@@ -276,20 +449,25 @@ class LessonManager:
             for i, info in enumerate(lesson_infos[:6]):
                 try:
                     logger.debug(f"Fetching lesson {i+1}/{min(6, len(lesson_infos))}: {info['title'][:40]}")
-                    lesson_html = self._fetch_url(info["url"])
-                    text = self._extract_reading_text(lesson_html)
                     
-                    if text and len(text) > 100:
-                        levels = ["2", "3"]
-                        if "level 0" in lesson_html.lower() or "level-0" in lesson_html.lower():
-                            levels = ["0", "1", "2"]
-                        elif "level 4" in lesson_html.lower():
-                            levels = ["4", "5"]
-                        
-                        description = self._extract_description(lesson_html)
-                        
-                        texts = {level: text for level in levels}
-                        
+                    level_urls = info.get("level_urls")
+                    if not isinstance(level_urls, dict):
+                        level_urls = {"3": info["url"]}
+                    levels = sorted(level_urls.keys(), key=lambda x: int(x))
+                    
+                    texts = {}
+                    paragraphs = {}
+                    description = ""
+                    
+                    for level in levels:
+                        text, paras, desc = self._fetch_level_content(info, level)
+                        if text:
+                            texts[level] = text
+                            paragraphs[level] = paras
+                            if desc and not description:
+                                description = desc
+                    
+                    if texts:
                         lesson = Lesson(
                             title=info["title"],
                             url=info["url"],
@@ -297,10 +475,12 @@ class LessonManager:
                             description=description,
                             levels=levels,
                             texts=texts,
+                            level_urls=level_urls,
+                            paragraphs=paragraphs,
                         )
                         lessons.append(lesson)
                         self._cache[info["url"]] = lesson
-                        logger.info(f"Loaded: {lesson.title[:50]} ({len(text)} chars, levels: {levels})")
+                        logger.info(f"Loaded: {lesson.title[:50]} ({len(texts)} levels: {levels})")
                         
                 except NetworkError as e:
                     logger.warning(f"Failed to fetch lesson: {e}")

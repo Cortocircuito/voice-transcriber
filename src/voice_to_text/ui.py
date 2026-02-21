@@ -690,3 +690,123 @@ class UI:
         lang = self.config.ui_language
         console.print()
         console.print(f"[bold cyan]📚 {get_text('lessons_loading', lang)}[/bold cyan]")
+
+    def show_paragraph_page(
+        self,
+        text: str,
+        level: str,
+        paragraph_num: int,
+        total_paragraphs: int,
+        estimated_duration: int,
+    ) -> str:
+        """Show a single paragraph with navigation.
+        
+        Args:
+            text: Paragraph text to display
+            level: Selected level
+            paragraph_num: Current paragraph number (1-indexed)
+            total_paragraphs: Total number of paragraphs
+            estimated_duration: Estimated reading time in seconds
+            
+        Returns:
+            User action: 'record', 'next', 'prev', 'duration', 'back'
+        """
+        lang = self.config.ui_language
+        
+        min_label = get_text("minutes_short", lang)
+        sec_label = get_text("seconds_short", lang)
+        
+        if estimated_duration >= 60:
+            mins = estimated_duration // 60
+            secs = estimated_duration % 60
+            if secs > 0:
+                time_str = f"{mins}:{secs:02d} {min_label}"
+            else:
+                time_str = f"{mins} {min_label}"
+        else:
+            time_str = f"{estimated_duration} {sec_label}"
+        
+        lines = [
+            "",
+            f"  [bold cyan]📖 {get_text('reading_mode', lang)} - {get_text('level', lang)} {level}[/bold cyan]",
+            "",
+            f"  [dim]{get_text('paragraph', lang)} {paragraph_num} {get_text('of', lang)} {total_paragraphs}[/dim]",
+            f"  [dim]{get_text('estimated_time', lang)}: {time_str}[/dim]",
+            "",
+            f"  [dim]{get_text('read_aloud', lang)}[/dim]",
+            "",
+        ]
+        
+        text_lines = text.split("\n")
+        for line in text_lines[:15]:
+            if line.strip():
+                lines.append(f"  {line}")
+        
+        if len(text_lines) > 15:
+            lines.append(f"  [dim]...[/dim]")
+        
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="green"))
+        
+        nav_parts = []
+        if paragraph_num < total_paragraphs:
+            nav_parts.append(f"[N] {get_text('next_paragraph', lang)}")
+        nav_parts.append(f"[D] {get_text('change_duration', lang)}")
+        nav_parts.append(f"[R] {get_text('start_recording', lang)}")
+        if paragraph_num > 1:
+            nav_parts.append(f"[P] {get_text('prev_paragraph', lang)}")
+        nav_parts.append(f"[B] {get_text('menu_back', lang)}")
+        
+        nav_str = " │ ".join(nav_parts)
+        
+        console.print(f"\n[dim]{nav_str}[/dim]")
+        
+        try:
+            choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+            choice = choice.strip().lower()
+            
+            if choice == "r":
+                return "record"
+            elif choice == "n" and paragraph_num < total_paragraphs:
+                return "next"
+            elif choice == "p" and paragraph_num > 1:
+                return "back"
+            elif choice == "d":
+                return "duration"
+            elif choice == "b":
+                return "back"
+            else:
+                return "record"
+        except (EOFError, KeyboardInterrupt):
+            return "back"
+    
+    def show_paragraph_actions(self) -> None:
+        """Show actions after recording a paragraph (not the last one)."""
+        lang = self.config.ui_language
+        console.print(
+            f"\n[dim][R]{get_text('try_again', lang)} │ "
+            f"[N/{get_text('next_paragraph_short', lang)}]{get_text('next_paragraph', lang)} │ "
+            f"[S]{get_text('action_exit', lang)}[/dim]"
+        )
+    
+    def show_last_paragraph_actions(self) -> None:
+        """Show actions after recording the last paragraph."""
+        lang = self.config.ui_language
+        console.print(
+            f"\n[dim][R]{get_text('try_again', lang)} │ "
+            f"[N]{get_text('new_lesson', lang)} │ "
+            f"[S]{get_text('action_exit', lang)}[/dim]"
+        )
+    
+    def show_lesson_complete(self) -> None:
+        """Show message when all paragraphs are completed."""
+        lang = self.config.ui_language
+        lines = [
+            "",
+            f"  [bold green]🎉 {get_text('lesson_complete', lang)}[/bold green]",
+            "",
+        ]
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="green"))

@@ -288,78 +288,217 @@ class CLI:
             if not level:
                 continue
             
-            lesson_text = selected_lesson.get_text(level)
-            if not lesson_text:
+            paragraphs = selected_lesson.get_paragraphs(level)
+            
+            if not paragraphs:
+                lesson_text = selected_lesson.get_text(level)
+                if not lesson_text:
+                    self.ui.show_error(get_text("lessons_error", lang))
+                    continue
+                paragraphs = self._split_into_paragraphs(lesson_text)
+            
+            if not paragraphs:
                 self.ui.show_error(get_text("lessons_error", lang))
                 continue
             
-            pages = self._split_text_into_pages(lesson_text)
-            
             while True:
-                action = self._run_lesson_practice_loop(selected_lesson, pages, level)
+                action = self._run_lesson_practice_loop(selected_lesson, paragraphs, level)
                 
                 if action == "new_lesson":
                     break
                 elif action == "exit":
                     return
+    
+    def _split_into_paragraphs(self, text: str) -> list[tuple[str, int]]:
+        """Split text into paragraphs.
+        
+        Args:
+            text: Full text
+            
+        Returns:
+            List of (paragraph_text, word_count) tuples
+        """
+        import re
+        
+        paras = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
+        
+        result = []
+        for para in paras:
+            para = para.strip()
+            if para:
+                word_count = len(para.split())
+                result.append((para, word_count))
+        
+        if not result:
+            return [(text, len(text.split()))]
+        
+        return result
 
-    def _run_lesson_practice_loop(self, lesson, pages: list, level: str) -> str:
-        """Run lesson practice with pagination.
+    def _run_lesson_practice_loop(self, lesson, paragraphs: list, level: str) -> str:
+        """Run lesson practice with paragraph-by-paragraph recording.
         
         Args:
             lesson: The selected lesson
-            pages: List of (page_text, word_count) tuples
+            paragraphs: List of (paragraph_text, word_count) tuples
             level: The selected level
             
         Returns:
             Action: 'new_lesson', 'exit', or None
         """
         lang = self.config.ui_language
-        total_pages = len(pages)
-        page_num = 1
+        total_paragraphs = len(paragraphs)
+        current_para = 0
         
-        full_text = "\n\n".join([p[0] for p in pages])
-        total_words = sum([p[1] for p in pages])
-        
-        calculated_duration = self._calculate_reading_time(total_words)
-        
-        while True:
-            page_text, page_words = pages[page_num - 1]
-            page_duration = self._calculate_reading_time(page_words)
+        while current_para < total_paragraphs:
+            para_text, para_words = paragraphs[current_para]
+            para_duration = self._calculate_reading_time(para_words)
             
-            action = self.ui.show_lesson_page(
-                text=page_text,
+            action = self.ui.show_paragraph_page(
+                text=para_text,
                 level=level,
-                page_num=page_num,
-                total_pages=total_pages,
-                estimated_duration=page_duration,
+                paragraph_num=current_para + 1,
+                total_paragraphs=total_paragraphs,
+                estimated_duration=para_duration,
             )
             
             if action == "back":
-                return "new_lesson"
+                if current_para > 0:
+                    current_para -= 1
+                    continue
+                else:
+                    return "new_lesson"
             
             elif action == "duration":
                 new_duration = self.ui.prompt_duration_change(
                     current_duration=self.config.duration,
-                    calculated_duration=calculated_duration,
+                    calculated_duration=para_duration,
                 )
                 if new_duration:
                     self.config.duration = new_duration
                 continue
             
             elif action == "next":
-                page_num += 1
-                continue
-            
-            elif action == "prev":
-                page_num -= 1
+                current_para += 1
                 continue
             
             elif action == "record":
-                return self._run_lesson_recording(lesson, full_text, level, calculated_duration)
+                result = self._run_paragraph_recording(
+                    lesson, para_text, level, para_duration, current_para + 1, total_paragraphs
+                )
+                
+                if result == "next":
+                    current_para += 1
+                    continue
+                elif result == "retry":
+                    continue
+                elif result == "new_lesson":
+                    return "new_lesson"
+                elif result == "exit":
+                    return "exit"
+        
+        self.ui.show_lesson_complete()
+        
+        while True:
+            action = self.ui.show_practice_actions()
+            if action == "n":
+                return "new_lesson"
+            elif action == "s":
+                return "exit"
+            elif action == "r":
+                current_para = 0
+                break
         
         return "new_lesson"
 
+    def _run_paragraph_recording(
+        self,
+        lesson,
+        text: str,
+        level: str,
+        duration: int,
+        paragraph_num: int,
+        total_paragraphs: int,
+    ) -> str:
+        """Run the recording for a single paragraph.
+        
+        Args:
+            lesson: The selected lesson
+            text: The paragraph text
+            level: The selected level
+            duration: Recording duration
+            paragraph_num: Current paragraph number
+            total_paragraphs: Total paragraphs
+            
+        Returns:
+            Action string: 'next', 'retry', 'new_lesson', 'exit'
+        """
+        lang = self.config.ui_language
+        
+        self.ui.show_recording_start()
+        
+        mic_ok, _ = self.recorder.check_microphone()
+        self.ui.show_mic_status(mic_ok)
+        
+        audio_path = self.recorder.start_recording()
+        if not audio_path:
+            self.ui.show_error("Failed to start recording")
+            return "retry"
+        
+        self._run_progress(duration)
+        
+        self.recorder.stop_recording()
+        
+        self.ui.show_transcribing()
+        
+        success, transcribed = self.transcriber.transcribe_streaming(
+            audio_path, self.config, on_segment=None
+        )
+        
+        if not success or not transcribed:
+            self.ui.show_warning(get_text("no_audio", lang))
+            while True:
+                action = self.ui.show_practice_actions()
+                if action == "r":
+                    return "retry"
+                elif action == "n":
+                    return "new_lesson"
+                elif action == "s":
+                    return "exit"
+        
+        result = self.comparator.compare(text, transcribed)
+        
+        self.ui.show_comparison(text, transcribed, result)
+        
+        if transcribed.strip():
+            self.history.add_entry(
+                language="en",
+                duration=duration,
+                text=f"[Practice: {lesson.title[:30]} P{paragraph_num}] {transcribed}",
+            )
+        
+        while True:
+            if paragraph_num < total_paragraphs:
+                self.ui.show_paragraph_actions()
+            else:
+                self.ui.show_last_paragraph_actions()
+            
+            try:
+                from rich.console import Console
+                console = Console()
+                action = console.input(f"[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+                action = action.strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return "exit"
+            
+            if action == "r":
+                return "retry"
+            elif action == "n":
+                return "next"
+            elif action == "f":
+                return "next"
+            elif action == "s":
+                return "exit"
+    
     def _run_lesson_recording(self, lesson, text: str, level: str, duration: int) -> str:
         """Run the recording for lesson practice.
         
