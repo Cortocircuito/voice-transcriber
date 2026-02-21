@@ -2,6 +2,7 @@
 
 import argparse
 import atexit
+import re
 import signal
 import sys
 import time
@@ -13,7 +14,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRe
 from rich.text import Text
 
 from .comparison import TextComparator
-from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS
+from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS, WORDS_PER_MINUTE, WORDS_PER_PAGE_MIN, WORDS_PER_PAGE_MAX
 from .history import HistoryManager
 from .i18n import get_text, get_language_label
 from .lessons import LessonManager, NetworkError
@@ -190,6 +191,60 @@ class CLI:
         bar = "█" * filled + "░" * (width - filled)
         return bar
 
+    def _split_text_into_pages(self, text: str) -> list[tuple[str, int]]:
+        """Split text into pages by paragraphs.
+        
+        Args:
+            text: Full lesson text
+            
+        Returns:
+            List of (page_text, word_count) tuples
+        """
+        import math
+        
+        paragraphs = re.split(r'\n\n+', text)
+        
+        pages = []
+        current_page = []
+        current_words = 0
+        
+        for para in paragraphs:
+            para_words = len(para.split())
+            para = para.strip()
+            
+            if not para:
+                continue
+            
+            if current_words + para_words > WORDS_PER_PAGE_MAX and current_words > 0:
+                pages.append(("\n".join(current_page), current_words))
+                current_page = []
+                current_words = 0
+            
+            current_page.append(para)
+            current_words += para_words
+        
+        if current_page:
+            pages.append(("\n".join(current_page), current_words))
+        
+        if not pages:
+            pages = [(text, len(text.split()))]
+        
+        return pages
+
+    def _calculate_reading_time(self, word_count: int) -> int:
+        """Calculate estimated reading time in seconds.
+        
+        Args:
+            word_count: Number of words
+            
+        Returns:
+            Estimated time in seconds
+        """
+        import math
+        minutes = word_count / WORDS_PER_MINUTE
+        seconds = math.ceil(minutes * 60)
+        return max(10, seconds)
+
     def run_lesson_practice(self):
         """Run the lesson practice mode."""
         lang = self.config.ui_language
@@ -238,14 +293,130 @@ class CLI:
                 self.ui.show_error(get_text("lessons_error", lang))
                 continue
             
+            pages = self._split_text_into_pages(lesson_text)
+            
             while True:
-                self._run_lesson_session(selected_lesson, lesson_text, level)
+                action = self._run_lesson_practice_loop(selected_lesson, pages, level)
                 
-                action = self.ui.show_practice_actions()
-                if action == "n":
+                if action == "new_lesson":
                     break
-                elif action == "s":
+                elif action == "exit":
                     return
+
+    def _run_lesson_practice_loop(self, lesson, pages: list, level: str) -> str:
+        """Run lesson practice with pagination.
+        
+        Args:
+            lesson: The selected lesson
+            pages: List of (page_text, word_count) tuples
+            level: The selected level
+            
+        Returns:
+            Action: 'new_lesson', 'exit', or None
+        """
+        lang = self.config.ui_language
+        total_pages = len(pages)
+        page_num = 1
+        
+        full_text = "\n\n".join([p[0] for p in pages])
+        total_words = sum([p[1] for p in pages])
+        
+        calculated_duration = self._calculate_reading_time(total_words)
+        
+        while True:
+            page_text, page_words = pages[page_num - 1]
+            page_duration = self._calculate_reading_time(page_words)
+            
+            action = self.ui.show_lesson_page(
+                text=page_text,
+                level=level,
+                page_num=page_num,
+                total_pages=total_pages,
+                estimated_duration=page_duration,
+            )
+            
+            if action == "back":
+                return "new_lesson"
+            
+            elif action == "duration":
+                new_duration = self.ui.prompt_duration_change(
+                    current_duration=self.config.duration,
+                    calculated_duration=calculated_duration,
+                )
+                if new_duration:
+                    self.config.duration = new_duration
+                continue
+            
+            elif action == "next":
+                page_num += 1
+                continue
+            
+            elif action == "prev":
+                page_num -= 1
+                continue
+            
+            elif action == "record":
+                return self._run_lesson_recording(lesson, full_text, level, calculated_duration)
+        
+        return "new_lesson"
+
+    def _run_lesson_recording(self, lesson, text: str, level: str, duration: int) -> str:
+        """Run the recording for lesson practice.
+        
+        Args:
+            lesson: The selected lesson
+            text: The lesson text
+            level: The selected level
+            duration: Recording duration
+            
+        Returns:
+            Action string
+        """
+        lang = self.config.ui_language
+        
+        self.ui.show_recording_start()
+        
+        mic_ok, _ = self.recorder.check_microphone()
+        self.ui.show_mic_status(mic_ok)
+        
+        audio_path = self.recorder.start_recording()
+        if not audio_path:
+            self.ui.show_error("Failed to start recording")
+            return "continue"
+        
+        self._run_progress(duration)
+        
+        self.recorder.stop_recording()
+        
+        self.ui.show_transcribing()
+        
+        success, transcribed = self.transcriber.transcribe_streaming(
+            audio_path, self.config, on_segment=None
+        )
+        
+        if not success or not transcribed:
+            self.ui.show_warning(get_text("no_audio", lang))
+            return "continue"
+        
+        result = self.comparator.compare(text, transcribed)
+        
+        self.ui.show_comparison(text, transcribed, result)
+        
+        if transcribed.strip():
+            self.history.add_entry(
+                language="en",
+                duration=duration,
+                text=f"[Practice: {lesson.title[:30]}] {transcribed}",
+            )
+        
+        while True:
+            action = self.ui.show_practice_actions()
+            if action == "r":
+                return self._run_lesson_recording(lesson, text, level, duration)
+            elif action == "n":
+                return "new_lesson"
+            elif action == "s":
+                return "exit"
 
     def _run_lesson_session(self, lesson, text: str, level: str):
         """Run a single lesson practice session.
@@ -316,6 +487,8 @@ class CLI:
         
         console.print()
         console.print(f"[dim]{get_text('ready', self.config.ui_language)}[/dim]")
+        
+        self.lesson_manager.preload_lessons_async()
         
         self.transcriber.load_model()
         

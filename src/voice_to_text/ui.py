@@ -14,7 +14,7 @@ from rich.text import Text
 from .config import Config
 from .i18n import get_text, get_language_label
 
-console = Console()
+console = Console(color_system="auto", force_terminal=True)
 BOX_STYLE = ROUNDED
 MIN_MENU_WIDTH = 40
 
@@ -478,6 +478,128 @@ class UI:
         console.print()
         console.print(self._create_panel("\n".join(lines), border_style="green"))
 
+    def show_lesson_page(
+        self,
+        text: str,
+        level: str,
+        page_num: int,
+        total_pages: int,
+        estimated_duration: int,
+    ) -> str:
+        """Show a page of lesson text with navigation.
+        
+        Args:
+            text: Page text to display
+            level: Selected level
+            page_num: Current page number (1-indexed)
+            total_pages: Total number of pages
+            estimated_duration: Estimated reading time in seconds
+            
+        Returns:
+            User action: 'record', 'next', 'prev', 'duration', 'back'
+        """
+        lang = self.config.ui_language
+        
+        min_label = get_text("minutes_short", lang)
+        sec_label = get_text("seconds_short", lang)
+        
+        if estimated_duration >= 60:
+            mins = estimated_duration // 60
+            secs = estimated_duration % 60
+            if secs > 0:
+                time_str = f"{mins}:{secs:02d} {min_label}"
+            else:
+                time_str = f"{mins} {min_label}"
+        else:
+            time_str = f"{estimated_duration} {sec_label}"
+        
+        lines = [
+            "",
+            f"  [bold cyan]📖 {get_text('reading_mode', lang)} - {get_text('level', lang)} {level}[/bold cyan]",
+            "",
+            f"  [dim]{get_text('read_aloud', lang)}[/dim]",
+            f"  [dim]{get_text('page', lang)} {page_num} {get_text('of', lang)} {total_pages} | {get_text('estimated_time', lang)}: {time_str}[/dim]",
+            "",
+        ]
+        
+        text_lines = text.split("\n")
+        for line in text_lines[:20]:
+            if line.strip():
+                lines.append(f"  {line}")
+        
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="green"))
+        
+        nav_parts = []
+        if total_pages > 1 and page_num < total_pages:
+            nav_parts.append(f"[N] {get_text('next_page', lang)}")
+        nav_parts.append(f"[D] {get_text('change_duration', lang)}")
+        nav_parts.append(f"[R] {get_text('start_recording', lang)}")
+        if page_num > 1:
+            nav_parts.append(f"[P] {get_text('prev_page', lang)}")
+        nav_parts.append(f"[B] {get_text('menu_back', lang)}")
+        
+        nav_str = " │ ".join(nav_parts)
+        
+        console.print(f"\n[dim]{nav_str}[/dim]")
+        
+        try:
+            choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+            choice = choice.strip().lower()
+            
+            if choice == "r":
+                return "record"
+            elif choice == "n" and page_num < total_pages:
+                return "next"
+            elif choice == "p" and page_num > 1:
+                return "prev"
+            elif choice == "d":
+                return "duration"
+            elif choice == "b":
+                return "back"
+            else:
+                return "record"
+        except (EOFError, KeyboardInterrupt):
+            return "back"
+
+    def prompt_duration_change(self, current_duration: int, calculated_duration: int) -> Optional[int]:
+        """Prompt user to change recording duration.
+        
+        Args:
+            current_duration: Current duration setting
+            calculated_duration: Calculated duration based on text
+            
+        Returns:
+            New duration or None
+        """
+        lang = self.config.ui_language
+        
+        console.print()
+        
+        lines = [
+            "",
+            f"  [bold cyan]⏱️ {get_text('change_duration', lang)}[/bold cyan]",
+            "",
+            f"  {get_text('current_duration', lang)}: {current_duration}s",
+            f"  {get_text('estimated_time', lang)}: {calculated_duration}s",
+            "",
+        ]
+        
+        console.print(self._create_panel("\n".join(lines), border_style="cyan"))
+        
+        try:
+            value = console.input(f"[bold cyan]{get_text('set_duration', lang)} [{calculated_duration}]: [/bold cyan] ")
+            if value.strip():
+                new_duration = int(value.strip())
+                if new_duration > 0:
+                    return new_duration
+        except (ValueError, EOFError, KeyboardInterrupt):
+            pass
+        
+        return None
+
     def show_comparison(self, original: str, transcribed: str, result) -> None:
         """Show comparison results with error highlighting.
         
@@ -486,57 +608,68 @@ class UI:
             transcribed: User's transcription
             result: ComparisonResult object
         """
+        from rich.console import Group
+        from rich.text import Text as RichText
+        
         lang = self.config.ui_language
         
         accuracy_pct = result.accuracy * 100
         accuracy_color = "green" if accuracy_pct >= 80 else "yellow" if accuracy_pct >= 60 else "red"
         
-        lines = [
+        header_lines = [
             "",
             f"  [bold cyan]📊 {get_text('comparison_title', lang)}[/bold cyan]",
             "",
-            f"  [{accuracy_color}]📈 {get_text('accuracy', lang)}: {accuracy_pct:.1f}% ({result.correct_count}/{result.total_count} {get_text('words_correct', lang)})[/{accuracy_color}]",
-            "",
         ]
         
-        if result.errors:
-            lines.append(f"  [bold red]❌ {get_text('mispronounced', lang)} ({len(result.errors)}):[/bold red]")
-            lines.append("")
-            
-            for idx, orig, trans in result.errors[:8]:
-                if trans == "(missing)":
-                    lines.append(f"    • \"{orig}\" - {get_text('missed', lang)}")
-                else:
-                    lines.append(f"    • \"{orig}\" → \"{trans}\"")
-            
-            if len(result.errors) > 8:
-                lines.append(f"    [dim]... and {len(result.errors) - 8} more[/dim]")
-            lines.append("")
-        else:
-            lines.append(f"  [bold green]✅ {get_text('no_errors', lang)}[/bold green]")
-            lines.append("")
-        
-        lines.append(f"  [bold]{get_text('comparison_original', lang)}:[/bold]")
-        
-        error_indices = {e[0] for e in result.errors}
-        words = result.original_words[:30]
-        
-        word_display = []
-        for i, word in enumerate(words):
-            if i in error_indices:
-                word_display.append(f"[bold red]{word}[/bold red]")
+        orig_error_indices = result.orig_error_indices if hasattr(result, 'orig_error_indices') else set()
+        orig_words = result.original_words[:80]
+        orig_rich = RichText()
+        for i, word in enumerate(orig_words):
+            if i in orig_error_indices:
+                orig_rich.append(word + " ", "bold red")
             else:
-                word_display.append(f"[green]{word}[/green]")
+                orig_rich.append(word + " ", "")
         
-        lines.append(f"  {' '.join(word_display)}")
+        trans_error_indices = result.trans_error_indices if hasattr(result, 'trans_error_indices') else set()
+        trans_words = result.transcribed_words[:80]
+        trans_rich = RichText()
+        for i, word in enumerate(trans_words):
+            if i in trans_error_indices:
+                trans_rich.append(word + " ", "bold red")
+            else:
+                trans_rich.append(word + " ", "")
         
-        if len(result.original_words) > 30:
-            lines.append(f"  [dim]... ({len(result.original_words) - 30} more words)[/dim]")
+        content_lines = [
+            f"  [bold]📖 {get_text('comparison_original', lang)}:[/bold]",
+            "",
+            orig_rich,
+        ]
         
-        lines.append("")
+        if len(result.original_words) > 80:
+            content_lines.append("  [dim]...[/dim]")
+        
+        content_lines.extend([
+            "",
+            f"  [bold]📝 {get_text('comparison_yours', lang)}:[/bold]",
+            "",
+            trans_rich,
+        ])
+        
+        if len(result.transcribed_words) > 80:
+            content_lines.append("  [dim]...[/dim]")
+        
+        content_lines.extend([
+            "",
+            "  " + "─" * 50,
+            "",
+            f"  [{accuracy_color}]📈 {get_text('accuracy', lang)}: {accuracy_pct:.1f}% ({result.correct_count}/{result.total_count} {get_text('words_correct', lang)})[/{accuracy_color}]",
+        ])
+        
+        full_content = "\n".join(header_lines) + "\n" + "\n".join([str(x) if not isinstance(x, RichText) else "" for x in content_lines])
         
         console.print()
-        console.print(self._create_panel("\n".join(lines), border_style="magenta"))
+        console.print(self._create_panel(Group(*content_lines), border_style="magenta"))
 
     def show_practice_actions(self) -> str:
         """Show practice session action prompts.

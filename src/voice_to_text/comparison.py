@@ -88,6 +88,9 @@ class ComparisonResult:
     transcribed_words: list[str] = field(default_factory=list)
     matches: list[WordMatch] = field(default_factory=list)
     errors: list[tuple[int, str, str]] = field(default_factory=list)
+    error_details: list[dict] = field(default_factory=list)
+    trans_error_indices: set = field(default_factory=set)
+    orig_error_indices: set = field(default_factory=set)
     accuracy: float = 0.0
     correct_count: int = 0
     total_count: int = 0
@@ -181,65 +184,95 @@ class TextComparator:
         
         matches: list[WordMatch] = []
         errors: list[tuple[int, str, str]] = []
+        error_details: list[dict] = []
+        orig_error_indices: set[int] = set()
+        trans_error_indices: set[int] = set()
         correct_count = 0
         
         opcodes = matcher.get_opcodes()
         
-        orig_idx = 0
-        trans_idx = 0
+        orig_pos = 0
+        trans_pos = 0
         
         for tag, i1, i2, j1, j2 in opcodes:
             if tag == 'equal':
                 for k in range(i2 - i1):
-                    orig_word = original_words_raw[orig_idx] if orig_idx < len(original_words_raw) else ""
-                    trans_word = transcribed_words_raw[trans_idx] if trans_idx < len(transcribed_words_raw) else ""
+                    orig_word = original_words_raw[orig_pos] if orig_pos < len(original_words_raw) else ""
+                    trans_word = transcribed_words_raw[trans_pos] if trans_pos < len(transcribed_words_raw) else ""
                     
                     matches.append(WordMatch(
                         original=orig_word,
                         transcribed=trans_word,
                         is_match=True,
-                        index=orig_idx,
+                        index=orig_pos,
                     ))
                     correct_count += 1
-                    orig_idx += 1
-                    trans_idx += 1
+                    orig_pos += 1
+                    trans_pos += 1
                     
             elif tag == 'replace':
-                orig_segment = original_normalized[i1:i2]
-                trans_segment = transcribed_normalized[j1:j2]
+                orig_segment_len = i2 - i1
+                trans_segment_len = j2 - j1
                 
-                for k, orig_word in enumerate(orig_segment):
-                    orig_word_raw = original_words_raw[orig_idx] if orig_idx < len(original_words_raw) else ""
-                    trans_word_raw = transcribed_words_raw[trans_idx] if trans_idx < len(transcribed_words_raw) else ""
-                    
-                    matches.append(WordMatch(
-                        original=orig_word_raw,
-                        transcribed=trans_word_raw if k == 0 else "",
-                        is_match=False,
-                        index=orig_idx,
-                    ))
-                    errors.append((orig_idx, orig_word_raw, trans_word_raw if k == 0 else "(missing)"))
-                    orig_idx += 1
-                    
-                if len(trans_segment) > len(orig_segment):
-                    for k in range(len(orig_segment), len(trans_segment)):
-                        trans_idx += 1
+                for k in range(max(orig_segment_len, trans_segment_len)):
+                    if k < orig_segment_len:
+                        orig_word = original_words_raw[orig_pos] if orig_pos < len(original_words_raw) else ""
+                        trans_word = transcribed_words_raw[trans_pos] if k < trans_segment_len and trans_pos < len(transcribed_words_raw) else ""
+                        
+                        orig_error_indices.add(orig_pos)
+                        
+                        if trans_word:
+                            trans_error_indices.add(trans_pos)
+                        
+                        error_msg = trans_word if trans_word else "(missing)"
+                        errors.append((orig_pos, orig_word, error_msg))
+                        error_details.append({
+                            "orig_idx": orig_pos,
+                            "trans_idx": trans_pos if trans_word else None,
+                            "expected": orig_word,
+                            "got": error_msg,
+                        })
+                        
+                        matches.append(WordMatch(
+                            original=orig_word,
+                            transcribed=trans_word,
+                            is_match=False,
+                            index=orig_pos,
+                        ))
+                        orig_pos += 1
+                        
+                    if k < trans_segment_len:
+                        if k >= orig_segment_len:
+                            trans_word = transcribed_words_raw[trans_pos] if trans_pos < len(transcribed_words_raw) else ""
+                            trans_error_indices.add(trans_pos)
+                        trans_pos += 1
                         
             elif tag == 'delete':
                 for k in range(i1, i2):
-                    orig_word_raw = original_words_raw[orig_idx] if orig_idx < len(original_words_raw) else ""
+                    orig_word = original_words_raw[orig_pos] if orig_pos < len(original_words_raw) else ""
+                    
+                    orig_error_indices.add(orig_pos)
+                    errors.append((orig_pos, orig_word, "(missing)"))
+                    error_details.append({
+                        "orig_idx": orig_pos,
+                        "trans_idx": None,
+                        "expected": orig_word,
+                        "got": "(missing)",
+                    })
+                    
                     matches.append(WordMatch(
-                        original=orig_word_raw,
+                        original=orig_word,
                         transcribed="",
                         is_match=False,
-                        index=orig_idx,
+                        index=orig_pos,
                     ))
-                    errors.append((orig_idx, orig_word_raw, "(missing)"))
-                    orig_idx += 1
+                    orig_pos += 1
                     
             elif tag == 'insert':
                 for k in range(j1, j2):
-                    trans_idx += 1
+                    trans_word = transcribed_words_raw[trans_pos] if trans_pos < len(transcribed_words_raw) else ""
+                    trans_error_indices.add(trans_pos)
+                    trans_pos += 1
         
         total_count = len(original_normalized)
         accuracy = correct_count / total_count if total_count > 0 else 0.0
@@ -252,6 +285,9 @@ class TextComparator:
             transcribed_words=transcribed_words_raw,
             matches=matches,
             errors=errors,
+            error_details=error_details,
+            trans_error_indices=trans_error_indices,
+            orig_error_indices=orig_error_indices,
             accuracy=accuracy,
             correct_count=correct_count,
             total_count=total_count,
