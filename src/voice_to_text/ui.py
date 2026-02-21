@@ -170,7 +170,7 @@ class UI:
             ]
             console.print(self._create_panel("\n".join(lines), border_style="green"))
 
-    def show_config(self) -> str:
+    def show_config(self, has_history: bool = False) -> str:
         """Show configuration menu and get choice."""
         lang = self.config.ui_language
         lang_label = get_language_label(self.config.language, lang)
@@ -180,7 +180,8 @@ class UI:
             ("[1]", "⏱️", f"{get_text('config_duration', lang)} [{self.config.duration}s]"),
             ("[2]", "🌐", f"{get_text('config_language', lang)} [{lang_label}]"),
             ("[3]", "💾", f"Model [{model_label}]"),
-            ("[4]", "←", get_text("menu_back", lang)),
+            ("[4]", "🗑️", f"{get_text('config_history', lang)}"),
+            ("[5]", "←", get_text("menu_back", lang)),
         ]
 
         content = self._build_menu_content(items)
@@ -192,7 +193,7 @@ class UI:
             choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
-            return "4"
+            return "5"
 
     def show_model_selector(self) -> Optional[str]:
         """Show model selector and return selected model size."""
@@ -288,3 +289,29 @@ class UI:
             return action.strip().lower()
         except (EOFError, KeyboardInterrupt):
             return "s"
+
+    def confirm_clear_history(self, entry_count: int) -> bool:
+        """Show confirmation dialog for clearing history.
+        
+        Args:
+            entry_count: Number of entries in history
+            
+        Returns:
+            True if user confirms, False otherwise
+        """
+        lang = self.config.ui_language
+        
+        if entry_count == 0:
+            self.show_warning(get_text("history_no_entries", lang))
+            return False
+        
+        console.print()
+        console.print(f"[bold yellow]🗑️  {get_text('history_confirm_clear', lang)} ({entry_count} entries)[/bold yellow]")
+        
+        try:
+            response = console.input(
+                f"[bold cyan]{get_text('yes', lang)}/{get_text('no', lang)}:[/bold cyan] "
+            )
+            return response.strip().lower() in ["y", "yes", "s", "sí", "si"]
+        except (EOFError, KeyboardInterrupt):
+            return False

@@ -51,7 +51,9 @@ class CLI:
     def configure(self):
         """Handle configuration menu."""
         while True:
-            choice = self.ui.show_config()
+            stats = self.history.get_stats()
+            total_entries = stats["total"] + len(self.history.get_entries())
+            choice = self.ui.show_config(has_history=total_entries > 0)
             
             if choice == "1":
                 new_duration = self.ui.prompt_duration()
@@ -71,6 +73,12 @@ class CLI:
                 if model_size:
                     self.config.model_size = model_size
                     self.ui.show_success(self.config.get_model_label())
+            elif choice == "4":
+                if self.ui.confirm_clear_history(total_entries):
+                    if self.history.clear_all():
+                        self.ui.show_success(get_text("history_cleared", self.config.ui_language))
+                    else:
+                        self.ui.show_error("Failed to clear history")
             else:
                 break
 

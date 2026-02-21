@@ -90,6 +90,31 @@ class HistoryManager:
         """Clear in-memory history."""
         self._entries.clear()
     
+    def clear_all(self) -> bool:
+        """Clear all history (in-memory and from file).
+        
+        Returns:
+            True if clearing was successful, False otherwise
+        """
+        self._entries.clear()
+        
+        if not self._history_file.exists():
+            return True
+        
+        try:
+            self._history_file.unlink()
+            logger.debug(f"Deleted history file: {self._history_file}")
+            return True
+        except PermissionError as e:
+            logger.error(f"Permission denied deleting history: {e}")
+            return False
+        except OSError as e:
+            logger.error(f"OS error deleting history: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error deleting history: {e}")
+            return False
+    
     def save(self) -> bool:
         """Save history to JSON file.
         

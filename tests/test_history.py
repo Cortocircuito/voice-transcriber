@@ -237,3 +237,52 @@ class TestHistoryManager:
             
             assert len(loaded) == 1
             assert loaded[0]["text"] == "Entry"
+
+    def test_clear_all_no_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = HistoryManager()
+            manager._history_file = Path(tmpdir) / "history.json"
+            manager.add_entry(language="en", duration=15, text="Test")
+            
+            result = manager.clear_all()
+            
+            assert result is True
+            assert len(manager.get_entries()) == 0
+
+    def test_clear_all_with_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            history_file = Path(tmpdir) / "history.json"
+            
+            existing = [{"timestamp": "2026-01-01T00:00:00", "language": "en", "duration": 15, "text": "Entry"}]
+            with open(history_file, 'w') as f:
+                json.dump(existing, f)
+            
+            manager = HistoryManager()
+            manager._history_file = history_file
+            manager.add_entry(language="en", duration=10, text="New")
+            
+            result = manager.clear_all()
+            
+            assert result is True
+            assert not history_file.exists()
+            assert len(manager.get_entries()) == 0
+
+    def test_clear_all_then_save_new(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            history_file = Path(tmpdir) / "history.json"
+            
+            existing = [{"timestamp": "2026-01-01T00:00:00", "language": "en", "duration": 15, "text": "Old"}]
+            with open(history_file, 'w') as f:
+                json.dump(existing, f)
+            
+            manager = HistoryManager()
+            manager._history_file = history_file
+            
+            manager.clear_all()
+            manager.add_entry(language="es", duration=20, text="New")
+            manager.save()
+            
+            loaded = manager.load_all()
+            assert len(loaded) == 1
+            assert loaded[0]["text"] == "New"
+            assert loaded[0]["language"] == "es"
