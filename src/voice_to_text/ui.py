@@ -78,7 +78,8 @@ class UI:
 
         duration_text = f"{self.config.duration}s"
         lang_text = get_language_label(self.config.language, lang)
-        subtitle = f"{duration_text} | {lang_text}"
+        model_text = self.config.model_size
+        subtitle = f"{duration_text} | {lang_text} | {model_text}"
 
         console.print()
         console.print(self._create_panel(content, subtitle=subtitle))
@@ -163,7 +164,7 @@ class UI:
         items = [
             ("[1]", "⏱️", f"{get_text('config_duration', lang)} [{self.config.duration}s]"),
             ("[2]", "🌐", f"{get_text('config_language', lang)} [{lang_label}]"),
-            ("[3]", "🧠", f"Model [{model_label}]"),
+            ("[3]", "💾", f"Model [{model_label}]"),
             ("[4]", "←", get_text("menu_back", lang)),
         ]
 
@@ -181,12 +182,13 @@ class UI:
     def show_model_selector(self) -> Optional[str]:
         """Show model selector and return selected model size."""
         lang = self.config.ui_language
+        current = self.config.model_size
 
         items = [
-            ("[1]", "🧠", f"tiny ({'≈75MB'})"),
-            ("[2]", "🧠", f"base ({'≈150MB'})"),
-            ("[3]", "🧠", f"small ({'≈500MB'})"),
-            ("[4]", "🧠", f"medium ({'≈1.5GB'})"),
+            ("[1]", "⚡", f"tiny   (~75MB)  {'✓' if current == 'tiny' else ''}"),
+            ("[2]", "📦", f"base   (~150MB) {'✓' if current == 'base' else ''}"),
+            ("[3]", "🚀", f"small  (~500MB) {'✓' if current == 'small' else ''}"),
+            ("[4]", "💪", f"medium (~1.5GB) {'✓' if current == 'medium' else ''}"),
             ("[0]", "←", get_text("menu_back", lang)),
         ]
 
