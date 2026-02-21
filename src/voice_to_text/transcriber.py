@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from faster_whisper import WhisperModel
 
@@ -43,26 +44,35 @@ class Transcriber:
     @property
     def model(self) -> WhisperModel:
         if self._model is None:
-            console.print(f"[dim]⏳ Loading Whisper model ({self.model_size})...[/dim]")
-            try:
-                self._model = WhisperModel(
-                    self.model_size,
-                    device=self.device,
-                    compute_type=self.compute_type,
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                progress.add_task(
+                    f"[cyan]Loading Whisper model ({self.model_size})...",
+                    total=None,
                 )
-            except OSError as e:
-                if "No such file or directory" in str(e) or "404" in str(e):
-                    raise ModelDownloadError(
-                        f"Failed to download model '{self.model_size}'. "
-                        f"Please check your internet connection and try again. Error: {e}"
-                    ) from e
-                if "Permission denied" in str(e):
-                    raise ModelLoadError(
-                        f"Permission denied while loading model. Check cache directory permissions. Error: {e}"
-                    ) from e
-                raise ModelLoadError(f"Failed to load model: {e}") from e
-            except Exception as e:
-                raise ModelLoadError(f"Failed to load Whisper model: {e}") from e
+                try:
+                    self._model = WhisperModel(
+                        self.model_size,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                    )
+                except OSError as e:
+                    if "No such file or directory" in str(e) or "404" in str(e):
+                        raise ModelDownloadError(
+                            f"Failed to download model '{self.model_size}'. "
+                            f"Please check your internet connection and try again. Error: {e}"
+                        ) from e
+                    if "Permission denied" in str(e):
+                        raise ModelLoadError(
+                            f"Permission denied while loading model. Check cache directory permissions. Error: {e}"
+                        ) from e
+                    raise ModelLoadError(f"Failed to load model: {e}") from e
+                except Exception as e:
+                    raise ModelLoadError(f"Failed to load Whisper model: {e}") from e
+            console.print(f"[green]✓[/green] [dim]Model loaded successfully[/dim]")
         return self._model
 
     def transcribe(self, audio_path: str, config: Config) -> Tuple[bool, str]:
