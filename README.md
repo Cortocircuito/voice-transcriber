@@ -7,8 +7,11 @@ A simple voice-to-text (Speech to Text) tool using [faster-whisper](https://gith
 - Real-time audio recording with configurable duration
 - Fast transcription using faster-whisper
 - Interactive menu with Spanish interface
-- Configurable recording duration (10s, 15s, 30s)
+- Configurable recording duration (custom seconds, default 15s)
+- Multi-language transcription support (English, Spanish, French, German)
 - Real-time countdown during recording
+- Duration input validation
+- Empty transcription detection
 
 ## Requirements
 
@@ -20,8 +23,8 @@ A simple voice-to-text (Speech to Text) tool using [faster-whisper](https://gith
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/YOUR_USERNAME/voz_a_texto.git
-cd voz_a_texto
+git clone https://github.com/cortocircuito/voice-transcriber.git
+cd voice-transcriber
 ```
 
 2. Create and activate a virtual environment:
@@ -42,12 +45,33 @@ Run the main dictation script:
 ./STT/dictado.sh
 ```
 
+### Menu
+
+```
+=== MENÚ ===
+1) Grabar
+2) Configurar (D:15s L:Inglés)
+3) Salir
+```
+
 ### Controls
 
-- Select recording duration: 10s (Corto), 15s (Medio), 30s (Largo)
-- Press `S` to return to menu
-- Press `1`, `2`, or `3` during recording to change duration
-- Press `Ctrl+C` to exit
+- **1** - Start recording
+- **2** - Configure duration and language
+- **D** - Change duration during recording
+- **I** - Change language during recording
+- **S** - Return to menu
+- **Ctrl+C** - Exit
+
+### Configuration
+
+- **Duration**: Enter custom seconds (default: 15s, valid: 1-300)
+- **Language**: 1)English 2)Spanish 3)French 4)German
+
+### Error Handling
+
+- Invalid duration input → defaults to 15s
+- Empty transcription → warns user "No se detectó ningún audio"
 
 ### Manual Transcription
 
@@ -62,10 +86,9 @@ faster-whisper audio_file.wav --language en -o output.txt
 ```
 voz_a_texto/
 ├── STT/
-│   ├── dictado.sh        # Main script (with real-time countdown)
-│   └── dictado-old.sh    # Previous version (without countdown)
-├── whisper_venv/         # Python virtual environment
-├── AGENTS.md             # Guidelines for AI agents
+│   └── dictatesh        # Main script
+├── whisper_venv/        # Python virtual environment
+├── AGENTS.md            # Guidelines for AI agents
 └── README.md
 ```
 
@@ -77,21 +100,20 @@ The script uses `arecord` (ALSA) for audio capture:
 - Channels: 1 (mono)
 - Device: `default`
 
-If your microphone doesn't work, modify `DISPOSITIVO_GRABACION` in the script:
+If your microphone doesn't work, modify `RECORDING_DEVICE` in the script:
 ```bash
-DISPOSITIVO_GRABACION="default"  # Change to your device, e.g., "hw:0,0"
+RECORDING_DEVICE="default"  # Change to your device, e.g., "hw:0,0"
 ```
 
 ## Supported Languages
 
-The transcription language is set to English (`--language en`). To transcribe in another language, modify the `faster-whisper` command in the script:
+The script supports:
+- English (en)
+- Spanish (es)
+- French (fr)
+- German (de)
 
-```bash
-faster-whisper "$ARCHIVO_AUDIO" --language es -o "$ARCHIVO_BRUTO"  # Spanish
-faster-whisper "$ARCHIVO_AUDIO" --language fr -o "$ARCHIVO_BRUTO"  # French
-```
-
-See [faster-whisper documentation](https://github.com/SYSTRAN/faster-whisper) for supported languages.
+Select language from the configuration menu or during recording.
 
 ## License
 

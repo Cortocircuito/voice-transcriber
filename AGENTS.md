@@ -11,11 +11,8 @@ A voice-to-text (Speech to Text) tool using faster-whisper for audio transcripti
 ### Running the Application
 
 ```bash
-# Run the main dictation script (with real-time countdown)
+# Run the main dictation script
 ./STT/dictado.sh
-
-# Run the old version (without countdown)
-./STT/dictado-old.sh
 ```
 
 ### Virtual Environment
@@ -42,15 +39,6 @@ This project currently has no automated tests. When adding Python code, use pyte
 ```bash
 # Run all tests
 pytest
-
-# Run a single test file
-pytest tests/test_file.py
-
-# Run a single test function
-pytest tests/test_file.py::test_function_name
-
-# Run with verbose output
-pytest -v
 ```
 
 ### Linting and Formatting
@@ -74,8 +62,8 @@ mypy .
 For Bash scripts:
 
 ```bash
-# Check shell scripts with shellcheck
-shellcheck STT/*.sh
+# Check bash syntax
+bash -n STT/dictado.sh
 ```
 
 ## Code Style Guidelines
@@ -83,7 +71,7 @@ shellcheck STT/*.sh
 ### Shell Scripts (Bash)
 
 - Use `#!/bin/bash` shebang
-- Use snake_case for variables and functions: `DURACION_GRABACION`, `run_dictation()`
+- Use snake_case for variables and functions: `DURATION`, `run_dictation()`
 - Use UPPER_CASE for constants and global variables
 - Quote all variable expansions: `"$VARIABLE"`
 - Use `[[ ]]` for conditionals instead of `[ ]` or `test`
@@ -198,13 +186,42 @@ def function_name(param1: str, param2: int) -> bool:
 ```
 voz_a_texto/
 ├── STT/
-│   ├── dictado.sh        # Main dictation script (with real-time countdown)
-│   └── dictado-old.sh    # Previous version without countdown
-├── whisper_venv/         # Python virtual environment
-├── comando.wav           # Temporary audio file (generated)
+│   └── dictatesh        # Main dictation script
+├── whisper_venv/        # Python virtual environment
+├── comando.wav         # Temporary audio file (generated)
 ├── transcripcion_bruta.txt   # Raw transcription output
 └── texto_puro_final.txt  # Cleaned transcription text
 ```
+
+## Configuration Variables
+
+Main variables in `STT/dictado.sh`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DURATION` | 15 | Recording duration in seconds (1-300) |
+| `LANGUAGE` | en | Transcription language (en/es/fr/de) |
+| `RECORDING_DEVICE` | default | ALSA recording device |
+
+## Supported Languages
+
+| Code | Language |
+|------|----------|
+| en | English |
+| es | Spanish |
+| fr | French |
+| de | German |
+
+## Key Functions
+
+| Function | Description |
+|----------|-------------|
+| `validate_duration()` | Validates duration input (1-300 seconds) |
+| `check_mic_level()` | Tests microphone connectivity |
+| `clean_transcription()` | Filters raw transcription output |
+| `record_audio()` | Records audio with countdown |
+| `transcribe()` | Transcribes audio using faster-whisper |
+| `configure_settings()` | Configure duration and language |
 
 ## Dependencies
 
@@ -222,11 +239,13 @@ The scripts use `arecord` (ALSA) for audio capture:
 - Format: S16_LE (16-bit signed little-endian)
 - Sample rate: 16000 Hz
 - Channels: 1 (mono)
-- Device: `default` (configurable)
+- Device: `default` (configurable via `RECORDING_DEVICE`)
 
 ## Notes
 
 - The project uses Spanish for user-facing text and comments
 - Audio files are temporary and cleaned up after each session
-- The transcription language is set to English (`--language en`)
-- Modify `DISPOSITIVO_GRABACION` if the default microphone doesn't work
+- Language and duration are configurable via menu
+- Duration input is validated (1-300 seconds)
+- Empty transcription detection warns user
+- Modify `RECORDING_DEVICE` if the default microphone doesn't work

@@ -46,6 +46,30 @@ get_lang_label() {
     esac
 }
 
+validate_duration() {
+    local dur="$1"
+    if [[ ! "$dur" =~ ^[0-9]+$ ]] || [[ "$dur" -lt 1 ]] || [[ "$dur" -gt 300 ]]; then
+        echo "⚠️ Duración inválida. Usando 15s por defecto."
+        echo "15"
+        return 1
+    fi
+    echo "$dur"
+}
+
+check_mic_level() {
+    echo -n "🎤 Mic: "
+    timeout 0.5 arecord -D "$RECORDING_DEVICE" -f S16_LE -r 16000 -c 1 /dev/null 2>/dev/null
+    local status=$?
+    # 124 = timeout (mic working), 0 = completed (unlikely for arecord)
+    if [[ $status -eq 124 ]] || [[ $status -eq 0 ]]; then
+        echo "✅"
+        return 0
+    else
+        echo "⚠️"
+        return 1
+    fi
+}
+
 configure_settings() {
     echo ""
     echo "--- CONFIGURACIÓN (D:${DURATION}s | L:$(get_lang_label $LANGUAGE)) ---"
@@ -55,7 +79,11 @@ configure_settings() {
     
     case "$opt" in
         1)
-            read -p "Segundos [$DURATION]: " DURATION
+            read -p "Segundos [$DURATION]: " new_dur
+            if [[ -n "$new_dur" ]]; then
+                validated=$(validate_duration "$new_dur")
+                DURATION=$validated
+            fi
             ;;
         2)
             read -p "1)Inglés 2)Español 3)Francés 4)Alemán: " lang_opt
@@ -67,6 +95,7 @@ configure_settings() {
 # --- Grabación ---
 record_audio() {
     local duration="$1"
+    check_mic_level
     echo "Iniciando... ¡HABLA AHORA!"
     
     trap 'echo; echo "Interrumpido."; kill $PID 2>/dev/null; wait $PID 2>/dev/null; trap - INT; return 1' INT
@@ -90,10 +119,18 @@ transcribe() {
     faster-whisper "$AUDIO_FILE" --language "$LANGUAGE" -o "$RAW_TRANSCRIPTION" 2>/dev/null
     clean_transcription
     
+    if [[ ! -s "$CLEAN_TRANSCRIPTION" ]]; then
+        echo "-----------------------------------"
+        echo "⚠️ No se detectó ningún audio. ¿Hablaste durante la grabación?"
+        echo "-----------------------------------"
+        return 1
+    fi
+    
     echo "-----------------------------------"
     echo "✅ Transcripción ($(get_lang_label $LANGUAGE)):"
     cat "$CLEAN_TRANSCRIPTION"
     echo "-----------------------------------"
+    return 0
 }
 
 # --- Flujo Principal ---
@@ -110,7 +147,13 @@ run_dictation() {
         echo
         
         case "$action" in
-            [Dd]) read -p "Segundos [$DURATION]: " DURATION ;;
+            [Dd]) 
+                read -p "Segundos [$DURATION]: " new_dur
+                if [[ -n "$new_dur" ]]; then
+                    validated=$(validate_duration "$new_dur")
+                    DURATION=$validated
+                fi
+                ;;
             [Ii]) 
                 read -p "1)en 2)es 3)fr 4)de: " lang_opt
                 [[ -n "${LANG_MAP[$lang_opt]}" ]] && LANGUAGE="${LANG_MAP[$lang_opt]}"
