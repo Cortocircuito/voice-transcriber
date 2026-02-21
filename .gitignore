@@ -1,33 +1,59 @@
-# Python virtual environment
-whisper_venv/
-venv/
-env/
-.venv/
-
-# Temporary audio files
-*.wav
-
-# Transcription output files
-transcripcion_bruta.txt
-texto_puro_final.txt
-texto_puro_final (Copiar).txt
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+whisper_venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Project specific
+*.wav
+*.mp3
+*.ogg
+*.flac
+transcripcion_*.txt
+texto_*.txt
+
+# OS
+.DS_Store
+Thumbs.db

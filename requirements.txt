@@ -1,1 +1,1 @@
-faster-whisper
+faster-whisper>=0.9.0

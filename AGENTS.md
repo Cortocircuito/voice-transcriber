@@ -4,46 +4,47 @@ This document provides guidelines for AI agents working in this repository.
 
 ## Project Overview
 
-A voice-to-text (Speech to Text) tool using faster-whisper for audio transcription. The project uses Bash scripts for the main application logic and a Python virtual environment for the whisper dependencies.
+A voice-to-text (Speech to Text) tool using faster-whisper for audio transcription. The project is a Python package with modular architecture following SOLID principles.
 
 ## Build/Lint/Test Commands
 
 ### Running the Application
 
 ```bash
-# Run the main dictation script
-./STT/dictado.sh
+# Run from source
+python -m voice_to_text
+
+# Run after installation
+voice-to-text
 ```
 
-### Virtual Environment
+### Installation
 
 ```bash
-# Activate the virtual environment
-source whisper_venv/bin/activate
+# Install in development mode
+pip install -e .
 
-# Deactivate
-deactivate
-```
-
-### Manual Transcription
-
-```bash
-# Activate venv first, then:
-faster-whisper <audio_file> --language en -o <output_file>
+# Install with dev dependencies
+pip install -e ".[dev]"
 ```
 
 ### Testing
 
-This project currently has no automated tests. When adding Python code, use pytest:
-
 ```bash
 # Run all tests
 pytest
+
+# Run with coverage
+pytest --cov=voice_to_text
+
+# Run a single test file
+pytest tests/test_config.py
+
+# Run with verbose output
+pytest -v
 ```
 
 ### Linting and Formatting
-
-For Python code, use these tools:
 
 ```bash
 # Format code with black
@@ -59,35 +60,32 @@ ruff check .
 mypy .
 ```
 
-For Bash scripts:
+## Architecture
 
-```bash
-# Check bash syntax
-bash -n STT/dictado.sh
+### Module Structure
+
 ```
+voice_to_text/
+├── __init__.py      # Package initialization, version
+├── __main__.py      # Entry point (python -m voice_to_text)
+├── cli.py           # CLI class - handles user interaction
+├── config.py        # Config dataclass - settings management
+├── recorder.py      # Recorder class - audio recording
+└── transcriber.py   # Transcriber class - transcription
+```
+
+### Classes
+
+| Class | Responsibility |
+|-------|---------------|
+| `Config` | Manages duration, language, and device settings |
+| `Recorder` | Handles audio recording via arecord |
+| `Transcriber` | Manages Whisper model and transcription |
+| `CLI` | Command-line interface and user interaction |
 
 ## Code Style Guidelines
 
-### Shell Scripts (Bash)
-
-- Use `#!/bin/bash` shebang
-- Use snake_case for variables and functions: `DURATION`, `run_dictation()`
-- Use UPPER_CASE for constants and global variables
-- Quote all variable expansions: `"$VARIABLE"`
-- Use `[[ ]]` for conditionals instead of `[ ]` or `test`
-- Use `$()` for command substitution instead of backticks
-- Add descriptive comments in Spanish (project convention)
-- Organize code into logical sections with comment headers:
-  ```bash
-  # --- Section Name ---
-  ```
-- Use functions for reusable logic
-- Always check return codes with `||` for error handling
-- Use `case` statements for menu selections
-
 ### Python Code
-
-When adding Python modules to this project:
 
 #### Imports
 
@@ -97,16 +95,15 @@ import os
 import sys
 
 # Third-party packages
-import numpy as np
 from faster_whisper import WhisperModel
 
 # Local modules
-from .module import function
+from .config import Config
 ```
 
 - Group imports: standard library, third-party, local
 - Sort alphabetically within each group
-- Use absolute imports for project modules
+- Use absolute imports for package modules
 - Use explicit imports (avoid `from module import *`)
 
 #### Formatting
@@ -121,15 +118,14 @@ from .module import function
 - Use type hints for all function signatures:
 
 ```python
-def transcribe_audio(
+def transcribe(
     audio_path: str,
-    language: str = "en",
-) -> tuple[str, float]:
+    config: Config,
+) -> bool:
     ...
 ```
 
 - Use `Optional[T]` for optional parameters
-- Use `Union[A, B]` or `A | B` for multiple types
 - Use `list[T]`, `dict[K, V]` instead of `List`, `Dict`
 
 #### Naming Conventions
@@ -138,70 +134,26 @@ def transcribe_audio(
 - Classes: `PascalCase`
 - Constants: `UPPER_SNAKE_CASE`
 - Private members: `_leading_underscore`
-- Module-level dunder names: `__all__`, `__version__`
 
 #### Error Handling
 
 - Use specific exception types
 - Provide meaningful error messages
-- Use context managers for resource handling:
-
-```python
-try:
-    with open(file_path, "r") as f:
-        content = f.read()
-except FileNotFoundError:
-    logger.error(f"File not found: {file_path}")
-    raise
-```
-
+- Use context managers for resource handling
 - Never use bare `except:` clauses
-- Log errors appropriately before re-raising
 
 #### Docstrings
 
 - Use triple double quotes for docstrings
-- Follow Google style:
+- Follow Google style
 
-```python
-def function_name(param1: str, param2: int) -> bool:
-    """Short description of function.
+## Configuration
 
-    Longer description if needed.
-
-    Args:
-        param1: Description of param1.
-        param2: Description of param2.
-
-    Returns:
-        Description of return value.
-
-    Raises:
-        ValueError: If param2 is negative.
-    """
-```
-
-## Project Structure
-
-```
-voz_a_texto/
-├── STT/
-│   └── dictatesh        # Main dictation script
-├── whisper_venv/        # Python virtual environment
-├── comando.wav         # Temporary audio file (generated)
-├── transcripcion_bruta.txt   # Raw transcription output
-└── texto_puro_final.txt  # Cleaned transcription text
-```
-
-## Configuration Variables
-
-Main variables in `STT/dictado.sh`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DURATION` | 15 | Recording duration in seconds (1-300) |
-| `LANGUAGE` | en | Transcription language (en/es/fr/de) |
-| `RECORDING_DEVICE` | default | ALSA recording device |
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `duration` | 15 | Recording duration in seconds (1-300) |
+| `language` | en | Transcription language (en/es/fr/de) |
+| `recording_device` | default | ALSA recording device |
 
 ## Supported Languages
 
@@ -212,40 +164,25 @@ Main variables in `STT/dictado.sh`:
 | fr | French |
 | de | German |
 
-## Key Functions
-
-| Function | Description |
-|----------|-------------|
-| `validate_duration()` | Validates duration input (1-300 seconds) |
-| `check_mic_level()` | Tests microphone connectivity |
-| `clean_transcription()` | Filters raw transcription output |
-| `record_audio()` | Records audio with countdown |
-| `transcribe()` | Transcribes audio using faster-whisper |
-| `configure_settings()` | Configure duration and language |
-
 ## Dependencies
 
-Main Python packages in the virtual environment:
+Main Python packages:
 
 - `faster-whisper` - Fast Whisper transcription
-- `ctranslate2` - Transformer inference engine
-- `numpy` - Numerical computing
-- `onnxruntime` - ONNX model runtime
+- `ctranslate2` - Transformer inference engine (dependency of faster-whisper)
 
-## Audio Recording
+Dev dependencies:
 
-The scripts use `arecord` (ALSA) for audio capture:
-
-- Format: S16_LE (16-bit signed little-endian)
-- Sample rate: 16000 Hz
-- Channels: 1 (mono)
-- Device: `default` (configurable via `RECORDING_DEVICE`)
+- `pytest` - Testing framework
+- `black` - Code formatter
+- `isort` - Import sorter
+- `ruff` - Linter
+- `mypy` - Type checker
 
 ## Notes
 
-- The project uses Spanish for user-facing text and comments
-- Audio files are temporary and cleaned up after each session
-- Language and duration are configurable via menu
-- Duration input is validated (1-300 seconds)
+- The project uses Spanish for user-facing text
+- Audio files are temporary and cleaned up after transcription
+- Duration is validated (1-300 seconds)
 - Empty transcription detection warns user
-- Modify `RECORDING_DEVICE` if the default microphone doesn't work
+- Follow SOLID principles for new features

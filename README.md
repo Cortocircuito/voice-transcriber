@@ -6,12 +6,11 @@ A simple voice-to-text (Speech to Text) tool using [faster-whisper](https://gith
 
 - Real-time audio recording with configurable duration
 - Fast transcription using faster-whisper
-- Interactive menu with Spanish interface
-- Configurable recording duration (custom seconds, default 15s)
 - Multi-language transcription support (English, Spanish, French, German)
 - Real-time countdown during recording
 - Duration input validation
 - Empty transcription detection
+- Modular and testable Python codebase
 
 ## Requirements
 
@@ -29,20 +28,31 @@ cd voice-transcriber
 
 2. Create and activate a virtual environment:
 ```bash
-python -m venv whisper_venv
-source whisper_venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 ```
 
-3. Install dependencies:
+3. Install the package:
 ```bash
-pip install faster-whisper
+pip install -e .
+```
+
+Or install from requirements:
+```bash
+pip install -r requirements.txt
 ```
 
 ## Usage
 
-Run the main dictation script:
+### As a command-line tool
+
 ```bash
-./STT/dictado.sh
+python -m voice_to_text
+```
+
+Or after installation:
+```bash
+voice-to-text
 ```
 
 ### Menu
@@ -68,52 +78,70 @@ Run the main dictation script:
 - **Duration**: Enter custom seconds (default: 15s, valid: 1-300)
 - **Language**: 1)English 2)Spanish 3)French 4)German
 
-### Error Handling
-
-- Invalid duration input → defaults to 15s
-- Empty transcription → warns user "No se detectó ningún audio"
-
-### Manual Transcription
-
-You can also transcribe an existing audio file:
-```bash
-source whisper_venv/bin/activate
-faster-whisper audio_file.wav --language en -o output.txt
-```
-
 ## Project Structure
 
 ```
-voz_a_texto/
-├── STT/
-│   └── dictatesh        # Main script
-├── whisper_venv/        # Python virtual environment
-├── AGENTS.md            # Guidelines for AI agents
-└── README.md
+voice-transcriber/
+├── src/
+│   └── voice_to_text/
+│       ├── __init__.py      # Package initialization
+│       ├── __main__.py      # Entry point
+│       ├── cli.py           # Command-line interface
+│       ├── config.py        # Configuration management
+│       ├── recorder.py      # Audio recording
+│       └── transcriber.py   # Transcription logic
+├── tests/
+│   ├── __init__.py
+│   └── test_config.py       # Unit tests
+├── pyproject.toml           # Project metadata
+├── requirements.txt         # Dependencies
+├── README.md
+└── LICENSE
 ```
 
-## Audio Configuration
+## Development
 
-The script uses `arecord` (ALSA) for audio capture:
-- Format: S16_LE (16-bit signed little-endian)
-- Sample rate: 16000 Hz
-- Channels: 1 (mono)
-- Device: `default`
+### Running Tests
 
-If your microphone doesn't work, modify `RECORDING_DEVICE` in the script:
 ```bash
-RECORDING_DEVICE="default"  # Change to your device, e.g., "hw:0,0"
+pytest
+```
+
+### Code Formatting
+
+```bash
+black .
+isort .
+```
+
+### Linting
+
+```bash
+ruff check .
+mypy .
 ```
 
 ## Supported Languages
 
-The script supports:
-- English (en)
-- Spanish (es)
-- French (fr)
-- German (de)
+| Code | Language |
+|------|----------|
+| en | English |
+| es | Spanish |
+| fr | French |
+| de | German |
 
-Select language from the configuration menu or during recording.
+## Audio Configuration
+
+The application uses `arecord` (ALSA) for audio capture:
+- Format: S16_LE (16-bit signed little-endian)
+- Sample rate: 16000 Hz
+- Channels: 1 (mono)
+
+If your microphone doesn't work, modify the `recording_device` in `Config`:
+```python
+from voice_to_text import Config
+config = Config(recording_device="hw:0,0")
+```
 
 ## License
 
