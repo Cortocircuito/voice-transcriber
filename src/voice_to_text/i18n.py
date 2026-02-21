@@ -35,6 +35,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "language_es": "Español",
         "language_fr": "Francés",
         "language_de": "Alemán",
+        "history_saved": "Historial guardado",
+        "history_empty": "No hay transcripciones para guardar",
     },
     "en": {
         "app_title": "🎤 VOICE TO TEXT",
@@ -68,6 +70,8 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "language_es": "Spanish",
         "language_fr": "French",
         "language_de": "German",
+        "history_saved": "History saved",
+        "history_empty": "No transcriptions to save",
     },
 }
 

@@ -1,6 +1,7 @@
 """Command-line interface for voice-to-text."""
 
 import argparse
+import atexit
 import signal
 import sys
 import time
@@ -12,6 +13,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRe
 from rich.text import Text
 
 from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS
+from .history import HistoryManager
 from .i18n import get_text, get_language_label
 from .recorder import Recorder
 from .transcriber import Transcriber
@@ -24,13 +26,25 @@ class CLI:
         self.recorder = Recorder(self.config.recording_device)
         self.transcriber = Transcriber(model_size=self.config.model_size)
         self.ui = UI(self.config)
+        self.history = HistoryManager()
         self._setup_signals()
 
     def _setup_signals(self):
         signal.signal(signal.SIGINT, self._signal_handler)
+        atexit.register(self._cleanup)
+
+    def _cleanup(self):
+        """Cleanup on exit - save history."""
+        entries = self.history.get_entries()
+        if entries:
+            from rich.console import Console
+            console = Console()
+            console.print(f"\n[dim]💾 {get_text('history_saved', self.config.ui_language)}...[/dim]")
+        self.history.save()
 
     def _signal_handler(self, signum, frame):
         self.recorder.interrupt()
+        self._cleanup()
         self.ui.show_goodbye()
         sys.exit(0)
 
@@ -87,6 +101,13 @@ class CLI:
             success, text = self.transcriber.transcribe_streaming(
                 audio_path, self.config, on_segment=on_segment
             )
+            
+            if success and text.strip():
+                self.history.add_entry(
+                    language=self.config.language,
+                    duration=self.config.duration,
+                    text=text,
+                )
             
             if not segments_displayed:
                 self.ui.show_transcription(text if text else "")
