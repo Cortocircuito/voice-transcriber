@@ -80,6 +80,7 @@ TRANSLATIONS = {
     "current_duration": "Current duration",
     "set_duration": "Set duration",
     "paragraph": "Paragraph",
+    "paragraphs": "Paragraphs",
     "next_paragraph": "Next paragraph",
     "next_paragraph_short": "F",
     "prev_paragraph": "Previous",

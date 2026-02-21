@@ -333,9 +333,32 @@ class CLI:
             return [(text, len(text.split()))]
         
         return result
+    
+    def _group_paragraphs(self, paragraphs: list, per_page: int = 2) -> list:
+        """Group paragraphs into pages.
+        
+        Args:
+            paragraphs: List of (text, word_count) tuples
+            per_page: Number of paragraphs per page
+            
+        Returns:
+            List of (combined_text, total_words, start_para, end_para) tuples
+        """
+        pages = []
+        total = len(paragraphs)
+        
+        for i in range(0, total, per_page):
+            group = paragraphs[i:i + per_page]
+            combined_text = "\n\n".join([p[0] for p in group])
+            total_words = sum([p[1] for p in group])
+            start_para = i + 1
+            end_para = min(i + per_page, total)
+            pages.append((combined_text, total_words, start_para, end_para))
+        
+        return pages
 
     def _run_lesson_practice_loop(self, lesson, paragraphs: list, level: str) -> str:
-        """Run lesson practice with paragraph-by-paragraph recording.
+        """Run lesson practice with page-by-page (2 paragraphs) recording.
         
         Args:
             lesson: The selected lesson
@@ -346,24 +369,27 @@ class CLI:
             Action: 'new_lesson', 'exit', or None
         """
         lang = self.config.ui_language
-        total_paragraphs = len(paragraphs)
-        current_para = 0
         
-        while current_para < total_paragraphs:
-            para_text, para_words = paragraphs[current_para]
-            para_duration = self._calculate_reading_time(para_words)
+        pages = self._group_paragraphs(paragraphs, per_page=2)
+        total_pages = len(pages)
+        current_page = 0
+        
+        while current_page < total_pages:
+            page_text, page_words, start_para, end_para = pages[current_page]
+            page_duration = self._calculate_reading_time(page_words)
             
             action = self.ui.show_paragraph_page(
-                text=para_text,
+                text=page_text,
                 level=level,
-                paragraph_num=current_para + 1,
-                total_paragraphs=total_paragraphs,
-                estimated_duration=para_duration,
+                start_paragraph=start_para,
+                end_paragraph=end_para,
+                total_paragraphs=len(paragraphs),
+                estimated_duration=page_duration,
             )
             
             if action == "back":
-                if current_para > 0:
-                    current_para -= 1
+                if current_page > 0:
+                    current_page -= 1
                     continue
                 else:
                     return "new_lesson"
@@ -371,23 +397,23 @@ class CLI:
             elif action == "duration":
                 new_duration = self.ui.prompt_duration_change(
                     current_duration=self.config.duration,
-                    calculated_duration=para_duration,
+                    calculated_duration=page_duration,
                 )
                 if new_duration:
                     self.config.duration = new_duration
                 continue
             
             elif action == "next":
-                current_para += 1
+                current_page += 1
                 continue
             
             elif action == "record":
                 result = self._run_paragraph_recording(
-                    lesson, para_text, level, para_duration, current_para + 1, total_paragraphs
+                    lesson, page_text, level, page_duration, start_para, end_para, len(paragraphs)
                 )
                 
                 if result == "next":
-                    current_para += 1
+                    current_page += 1
                     continue
                 elif result == "retry":
                     continue
@@ -405,7 +431,7 @@ class CLI:
             elif action == "s":
                 return "exit"
             elif action == "r":
-                current_para = 0
+                current_page = 0
                 break
         
         return "new_lesson"
@@ -416,17 +442,19 @@ class CLI:
         text: str,
         level: str,
         duration: int,
-        paragraph_num: int,
+        start_paragraph: int,
+        end_paragraph: int,
         total_paragraphs: int,
     ) -> str:
-        """Run the recording for a single paragraph.
+        """Run the recording for a page of paragraphs.
         
         Args:
             lesson: The selected lesson
-            text: The paragraph text
+            text: The combined paragraph text
             level: The selected level
             duration: Recording duration
-            paragraph_num: Current paragraph number
+            start_paragraph: Starting paragraph number
+            end_paragraph: Ending paragraph number
             total_paragraphs: Total paragraphs
             
         Returns:
@@ -470,14 +498,18 @@ class CLI:
         self.ui.show_comparison(text, transcribed, result)
         
         if transcribed.strip():
+            if start_paragraph == end_paragraph:
+                para_range = f"P{start_paragraph}"
+            else:
+                para_range = f"P{start_paragraph}-{end_paragraph}"
             self.history.add_entry(
                 language="en",
                 duration=duration,
-                text=f"[Practice: {lesson.title[:30]} P{paragraph_num}] {transcribed}",
+                text=f"[Practice: {lesson.title[:30]} {para_range}] {transcribed}",
             )
         
         while True:
-            if paragraph_num < total_paragraphs:
+            if end_paragraph < total_paragraphs:
                 self.ui.show_paragraph_actions()
             else:
                 self.ui.show_last_paragraph_actions()

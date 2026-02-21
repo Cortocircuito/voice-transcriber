@@ -695,16 +695,18 @@ class UI:
         self,
         text: str,
         level: str,
-        paragraph_num: int,
+        start_paragraph: int,
+        end_paragraph: int,
         total_paragraphs: int,
         estimated_duration: int,
     ) -> str:
-        """Show a single paragraph with navigation.
+        """Show a page with 1-2 paragraphs with navigation.
         
         Args:
-            text: Paragraph text to display
+            text: Combined paragraph text to display
             level: Selected level
-            paragraph_num: Current paragraph number (1-indexed)
+            start_paragraph: Starting paragraph number (1-indexed)
+            end_paragraph: Ending paragraph number
             total_paragraphs: Total number of paragraphs
             estimated_duration: Estimated reading time in seconds
             
@@ -726,11 +728,16 @@ class UI:
         else:
             time_str = f"{estimated_duration} {sec_label}"
         
+        if start_paragraph == end_paragraph:
+            para_label = f"{get_text('paragraph', lang)} {start_paragraph}"
+        else:
+            para_label = f"{get_text('paragraphs', lang)} {start_paragraph}-{end_paragraph}"
+        
         lines = [
             "",
             f"  [bold cyan]📖 {get_text('reading_mode', lang)} - {get_text('level', lang)} {level}[/bold cyan]",
             "",
-            f"  [dim]{get_text('paragraph', lang)} {paragraph_num} {get_text('of', lang)} {total_paragraphs}[/dim]",
+            f"  [dim]{para_label} {get_text('of', lang)} {total_paragraphs}[/dim]",
             f"  [dim]{get_text('estimated_time', lang)}: {time_str}[/dim]",
             "",
             f"  [dim]{get_text('read_aloud', lang)}[/dim]",
@@ -738,11 +745,11 @@ class UI:
         ]
         
         text_lines = text.split("\n")
-        for line in text_lines[:15]:
+        for line in text_lines[:20]:
             if line.strip():
                 lines.append(f"  {line}")
         
-        if len(text_lines) > 15:
+        if len(text_lines) > 20:
             lines.append(f"  [dim]...[/dim]")
         
         lines.append("")
@@ -751,11 +758,11 @@ class UI:
         console.print(self._create_panel("\n".join(lines), border_style="green"))
         
         nav_parts = []
-        if paragraph_num < total_paragraphs:
+        if end_paragraph < total_paragraphs:
             nav_parts.append(f"[N] {get_text('next_paragraph', lang)}")
         nav_parts.append(f"[D] {get_text('change_duration', lang)}")
         nav_parts.append(f"[R] {get_text('start_recording', lang)}")
-        if paragraph_num > 1:
+        if start_paragraph > 1:
             nav_parts.append(f"[P] {get_text('prev_paragraph', lang)}")
         nav_parts.append(f"[B] {get_text('menu_back', lang)}")
         
@@ -769,9 +776,9 @@ class UI:
             
             if choice == "r":
                 return "record"
-            elif choice == "n" and paragraph_num < total_paragraphs:
+            elif choice == "n" and end_paragraph < total_paragraphs:
                 return "next"
-            elif choice == "p" and paragraph_num > 1:
+            elif choice == "p" and start_paragraph > 1:
                 return "back"
             elif choice == "d":
                 return "duration"
