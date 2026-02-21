@@ -15,14 +15,11 @@ A voice-to-text (Speech to Text) tool using faster-whisper for audio transcripti
 ### Running the Application
 
 ```bash
-# Spanish UI (default)
+# English UI (default)
 python -m voice_to_text
 
-# English UI
-python -m voice_to_text --lang en
-
-# With custom settings
-python -m voice_to_text --lang en --duration 30 --language es
+# Spanish UI
+python -m voice_to_text --lang es
 ```
 
 ### Installation
@@ -341,7 +338,7 @@ The `i18n.py` module provides:
 
 ## Notes
 
-- The project uses Spanish for user-facing text by default
+- The project uses English for user-facing text by default
 - UI language can be changed with `--lang en` flag
 - Audio files are temporary and cleaned up after transcription
 - Duration is validated (1-300 seconds)

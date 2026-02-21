@@ -51,7 +51,7 @@ pip install -e .
 
 ## Usage
 
-### Spanish UI (default)
+### English UI (default)
 ```bash
 python -m voice_to_text
 ```
