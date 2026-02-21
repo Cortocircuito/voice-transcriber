@@ -162,7 +162,8 @@ class Recorder:
         if not self.check_arecord_available():
             return False, "arecord not found"
 
-        test_file = tempfile.mktemp(suffix=".wav")
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            test_file = f.name
         
         try:
             proc = subprocess.Popen(
@@ -220,7 +221,8 @@ class Recorder:
                 "arecord not found. Please install ALSA utilities (sudo apt install alsa-utils)"
             )
 
-        audio_path = tempfile.mktemp(suffix=".wav")
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            audio_path = f.name
 
         try:
             self._process = subprocess.Popen(

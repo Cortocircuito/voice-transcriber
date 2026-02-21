@@ -1,6 +1,6 @@
 """Voice to Text - Speech transcription using faster-whisper."""
 
-__version__ = "1.1.0"
+__version__ = "1.0.0"
 
 from .cli import CLI, main
 from .config import Config
