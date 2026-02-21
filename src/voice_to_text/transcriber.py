@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -81,6 +81,24 @@ class Transcriber:
 
     def transcribe(self, audio_path: str, config: Config) -> Tuple[bool, str]:
         """Transcribe audio file. Returns (success, text)."""
+        return self.transcribe_streaming(audio_path, config)
+
+    def transcribe_streaming(
+        self, 
+        audio_path: str, 
+        config: Config,
+        on_segment: Optional[Callable[[str], None]] = None,
+    ) -> Tuple[bool, str]:
+        """Transcribe audio file with optional streaming callback.
+        
+        Args:
+            audio_path: Path to audio file
+            config: Configuration
+            on_segment: Optional callback called for each transcribed segment
+            
+        Returns:
+            Tuple of (success, full_text)
+        """
         if not os.path.exists(audio_path):
             console.print("[red]Error: Audio file not found[/red]")
             return False, ""
@@ -91,8 +109,16 @@ class Transcriber:
 
         try:
             segments, info = self.model.transcribe(audio_path, language=config.language)
-            text = "\n".join(segment.text.strip() for segment in segments)
-            return True, text
+            
+            text_parts = []
+            for segment in segments:
+                segment_text = segment.text.strip()
+                if segment_text:
+                    text_parts.append(segment_text)
+                    if on_segment:
+                        on_segment(segment_text)
+            
+            return True, "\n".join(text_parts)
 
         except ModelDownloadError:
             return False, ""

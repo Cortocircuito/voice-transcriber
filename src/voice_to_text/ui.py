@@ -131,6 +131,17 @@ class UI:
         else:
             console.print(f"[yellow]🎤 {get_text('mic_check', lang)} ⚠️  {get_text('mic_not_found', lang)}[/yellow]")
 
+    def show_transcribing(self):
+        """Show transcription in progress message."""
+        lang = self.config.ui_language
+        console.print()
+        console.print(f"[bold cyan]🔄 {get_text('transcribing', lang)}...[/bold cyan]")
+        console.print()
+
+    def show_segment(self, text: str, segment_num: int):
+        """Show a transcribed segment in real-time."""
+        console.print(f"  [dim][{segment_num}][/dim] {text}")
+
     def show_transcription(self, text: str):
         """Show transcription result."""
         lang = self.config.ui_language

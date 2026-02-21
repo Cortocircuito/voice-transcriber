@@ -4,8 +4,10 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
-from typing import List, Optional, Tuple
+import wave
+from typing import Callable, List, Optional, Tuple
 
 from .config import CHANNELS, SAMPLE_RATE
 
@@ -112,6 +114,10 @@ class Recorder:
         self.device = device
         self._interrupted = False
         self._process: Optional[subprocess.Popen] = None
+        self._audio_path: Optional[str] = None
+        self._level_monitor_thread: Optional[threading.Thread] = None
+        self._current_level: float = 0.0
+        self._monitoring: bool = False
 
     def check_arecord_available(self) -> bool:
         """Check if arecord command is available."""
@@ -237,6 +243,8 @@ class Recorder:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            self._audio_path = audio_path
+            self._start_level_monitoring()
             return audio_path
         except PermissionError as e:
             raise MicrophonePermissionError(
@@ -255,6 +263,8 @@ class Recorder:
 
     def stop_recording(self) -> bool:
         """Stop recording."""
+        self._stop_level_monitoring()
+        self._audio_path = None
         if self._process:
             self._process.terminate()
             self._process.wait()
@@ -331,4 +341,38 @@ class Recorder:
 
     def get_audio_level(self) -> float:
         """Get current audio input level (0.0 to 1.0)."""
-        return 0.5
+        return self._current_level
+
+    def _monitor_audio_level(self):
+        """Background thread to monitor audio levels from the recording file."""
+        import struct
+        
+        while self._monitoring and self._audio_path and os.path.exists(self._audio_path):
+            try:
+                file_size = os.path.getsize(self._audio_path)
+                if file_size > 44:
+                    with open(self._audio_path, 'rb') as f:
+                        f.seek(44)
+                        data = f.read(min(3200, file_size - 44))
+                        if len(data) >= 2:
+                            samples = struct.unpack(f'<{len(data)//2}h', data[:len(data)//2*2])
+                            if samples:
+                                max_sample = max(abs(s) for s in samples)
+                                self._current_level = min(1.0, max_sample / 32768.0)
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def _start_level_monitoring(self):
+        """Start the audio level monitoring thread."""
+        self._monitoring = True
+        self._current_level = 0.0
+        self._level_monitor_thread = threading.Thread(target=self._monitor_audio_level, daemon=True)
+        self._level_monitor_thread.start()
+
+    def _stop_level_monitoring(self):
+        """Stop the audio level monitoring thread."""
+        self._monitoring = False
+        if self._level_monitor_thread:
+            self._level_monitor_thread.join(timeout=0.1)
+            self._level_monitor_thread = None

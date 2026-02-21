@@ -73,8 +73,19 @@ class CLI:
             
             self.recorder.stop_recording()
             
-            success, text = self.transcriber.transcribe(audio_path, self.config)
-            self.ui.show_transcription(text if text else "")
+            self.ui.show_transcribing()
+            
+            segments_displayed = []
+            def on_segment(text: str):
+                segments_displayed.append(text)
+                self.ui.show_segment(text, len(segments_displayed))
+            
+            success, text = self.transcriber.transcribe_streaming(
+                audio_path, self.config, on_segment=on_segment
+            )
+            
+            if not segments_displayed:
+                self.ui.show_transcription(text if text else "")
             
             action = self.ui.show_actions()
             
@@ -92,7 +103,9 @@ class CLI:
                 break
 
     def _run_progress(self, duration: int):
-        """Run progress bar for recording."""
+        """Run progress bar for recording with real-time audio level."""
+        import time as time_module
+        
         lang = self.config.ui_language
         lang_label = get_language_label(self.config.language, lang)
         
@@ -107,10 +120,37 @@ class CLI:
                 f"[cyan]{lang_label} • {duration}s",
                 total=duration,
             )
-            for _ in range(duration):
-                import time
-                time.sleep(1)
-                progress.update(task, advance=1)
+            
+            start_time = time_module.time()
+            while True:
+                elapsed = time_module.time() - start_time
+                if elapsed >= duration:
+                    progress.update(task, completed=duration)
+                    break
+                
+                progress.update(task, completed=int(elapsed))
+                
+                level = self.recorder.get_audio_level()
+                level_bar = self._format_level_bar(level)
+                progress.console.print(f"\r[green]🎤 Level:[/green] {level_bar} {level*100:3.0f}%", end="")
+                
+                time_module.sleep(0.1)
+            
+            progress.console.print()
+
+    def _format_level_bar(self, level: float, width: int = 20) -> str:
+        """Format audio level as a visual bar."""
+        filled = int(level * width)
+        bar = "█" * filled + "░" * (width - filled)
+        
+        if level > 0.7:
+            color = "red"
+        elif level > 0.4:
+            color = "yellow"
+        else:
+            color = "green"
+        
+        return f"[{color}]{bar}[/{color}]"
 
     def show_menu(self):
         """Show main menu."""
@@ -125,9 +165,8 @@ class CLI:
                 self.ui.show_goodbye()
                 break
 
-    def run(self):
+    def run(self, quick: bool = False):
         """Run the CLI application."""
-        console = self.ui.console if hasattr(self.ui, 'console') else None
         from rich.console import Console
         console = Console()
         
@@ -135,7 +174,12 @@ class CLI:
         console.print(f"[dim]{get_text('ready', self.config.ui_language)}[/dim]")
         
         self.transcriber.load_model()
-        self.show_menu()
+        
+        if quick:
+            self.run_dictation()
+            self.ui.show_goodbye()
+        else:
+            self.show_menu()
 
 
 def main():
@@ -159,6 +203,11 @@ def main():
         default="en",
         help="Transcription language (default: en)",
     )
+    parser.add_argument(
+        "--quick", "-q",
+        action="store_true",
+        help="Start recording immediately (skip menu)",
+    )
     
     args = parser.parse_args()
     
@@ -169,7 +218,7 @@ def main():
     )
     
     cli = CLI(config)
-    cli.run()
+    cli.run(quick=args.quick)
 
 
 if __name__ == "__main__":
