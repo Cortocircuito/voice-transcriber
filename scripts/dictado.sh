@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Configuración ---
-DIR_BASE="$HOME/Code/Python/voz_a_texto"
+DIR_BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_NAME="whisper_venv"
 AUDIO_FILE="comando.wav"
 RAW_TRANSCRIPTION="transcripcion_bruta.txt"
