@@ -37,6 +37,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "language_de": "Alemán",
         "history_saved": "Historial guardado",
         "history_empty": "No hay transcripciones para guardar",
+        "model_tiny": "tiny   (~75MB)",
+        "model_base": "base   (~150MB)",
+        "model_small": "small  (~500MB)",
+        "model_medium": "medium (~1.5GB)",
     },
     "en": {
         "app_title": "🎤 VOICE TO TEXT",
@@ -72,6 +76,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "language_de": "German",
         "history_saved": "History saved",
         "history_empty": "No transcriptions to save",
+        "model_tiny": "tiny   (~75MB)",
+        "model_base": "base   (~150MB)",
+        "model_small": "small  (~500MB)",
+        "model_medium": "medium (~1.5GB)",
     },
 }
 

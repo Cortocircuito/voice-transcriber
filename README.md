@@ -9,10 +9,13 @@ This README.md file contains user-facing documentation for humans using the voic
 ## Features
 
 - 🎤 Real-time audio recording with configurable duration
+- 📊 Real-time audio level meter during recording
 - ⚡ Fast transcription using faster-whisper
+- 📝 Partial transcription display (line-by-line streaming)
 - 🌍 Multi-language UI (Spanish/English)
 - 🗣️ Multi-language transcription (English, Spanish, French, German)
-- 📊 Animated progress bar with Rich
+- 🚀 Quick mode with `--quick` flag (skip menu, start recording immediately)
+- 💾 Auto-save transcription history on exit (JSON format)
 - 🎨 Beautiful terminal UI with panels and colors
 - ✅ Duration input validation
 - ⚠️ Empty transcription detection
@@ -60,13 +63,21 @@ python -m voice_to_text --lang en
 python -m voice_to_text --lang en --duration 30 --language es
 ```
 
+### Quick mode (skip menu, start recording immediately)
+```bash
+python -m voice_to_text --quick
+# or
+python -m voice_to_text -q
+```
+
 ### CLI Arguments
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `--lang` | UI language (es/en) | es |
-| `--duration` | Recording duration in seconds | 15 |
-| `--language` | Transcription language (en/es/fr/de) | en |
+| Argument | Short | Description | Default |
+|----------|-------|-------------|---------|
+| `--lang` | | UI language (es/en) | es |
+| `--duration` | | Recording duration in seconds | 15 |
+| `--language` | | Transcription language (en/es/fr/de) | en |
+| `--quick` | `-q` | Start recording immediately (skip menu) | false |
 
 ## Screenshots
 
@@ -92,7 +103,7 @@ python -m voice_to_text --lang en --duration 30 --language es
 ╰───────────────────── Duration: 15s │ Language: English ──────────────────────╯
 ```
 
-### Recording with Progress Bar
+### Recording with Progress Bar and Audio Level
 ```
 ╭──────────────────────────────────────────────╮
 │              🎙️  GRABANDO                     │
@@ -100,6 +111,7 @@ python -m voice_to_text --lang en --duration 30 --language es
 ╰──────────────────────────────────────────────╯
 🎤 Mic: ✅ Listo
    Inglés • 15s  ████████████░░░░░░░░  67%  5s
+🎤 Level: ████████████████░░░░  72%
 ```
 
 ### Transcription Result
@@ -124,6 +136,7 @@ voice-transcriber/
 │       ├── __main__.py      # Entry point
 │       ├── cli.py           # Command-line interface
 │       ├── config.py        # Configuration management
+│       ├── history.py       # Transcription history
 │       ├── i18n.py          # Internationalization
 │       ├── recorder.py      # Audio recording
 │       ├── transcriber.py   # Transcription logic
@@ -131,6 +144,7 @@ voice-transcriber/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_config.py
+│   ├── test_history.py
 │   └── test_recorder_transcriber.py
 ├── pyproject.toml           # Project metadata
 ├── README.md
@@ -179,6 +193,30 @@ from voice_to_text import Config, CLI
 config = Config(recording_device="hw:0,0")
 cli = CLI(config)
 cli.run()
+```
+
+## Transcription History
+
+Transcriptions are automatically saved on exit to:
+```
+~/.config/voice-to-text/history.json
+```
+
+History format:
+```json
+[
+  {
+    "timestamp": "2026-02-21T15:30:00.000000",
+    "language": "en",
+    "duration": 15,
+    "text": "Your transcribed text..."
+  }
+]
+```
+
+You can also use `XDG_CONFIG_HOME` to customize the location:
+```bash
+export XDG_CONFIG_HOME=~/.my-config
 ```
 
 ## Dependencies

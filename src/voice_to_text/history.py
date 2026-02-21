@@ -1,11 +1,29 @@
 """Transcription history management."""
 
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any
 from dataclasses import dataclass, asdict
+
+logger = logging.getLogger(__name__)
+
+
+class HistoryError(Exception):
+    """Base exception for history errors."""
+    pass
+
+
+class HistorySaveError(HistoryError):
+    """Raised when saving history fails."""
+    pass
+
+
+class HistoryLoadError(HistoryError):
+    """Raised when loading history fails."""
+    pass
 
 
 def get_xdg_config_dir() -> Path:
@@ -44,26 +62,40 @@ class HistoryManager:
     """Manages transcription history."""
     
     def __init__(self):
-        self._entries: List[HistoryEntry] = []
+        self._entries: list[HistoryEntry] = []
         self._config_dir = get_xdg_config_dir()
         self._history_file = get_history_file_path()
     
-    def add_entry(self, language: str, duration: int, text: str):
-        """Add a new transcription to history."""
+    def add_entry(self, language: str, duration: int, text: str) -> None:
+        """Add a new transcription to history.
+        
+        Args:
+            language: Language code of the transcription
+            duration: Recording duration in seconds
+            text: Transcribed text
+        """
         if text.strip():
             entry = HistoryEntry.create(language, duration, text)
             self._entries.append(entry)
     
-    def get_entries(self) -> List[HistoryEntry]:
-        """Get all history entries."""
+    def get_entries(self) -> list[HistoryEntry]:
+        """Get all in-memory history entries.
+        
+        Returns:
+            Copy of the entries list
+        """
         return self._entries.copy()
     
-    def clear(self):
+    def clear(self) -> None:
         """Clear in-memory history."""
         self._entries.clear()
     
     def save(self) -> bool:
-        """Save history to JSON file."""
+        """Save history to JSON file.
+        
+        Returns:
+            True if save was successful, False otherwise
+        """
         if not self._entries:
             return True
         
@@ -74,32 +106,66 @@ class HistoryManager:
             
             all_entries = existing_entries + [asdict(e) for e in self._entries]
             
-            with open(self._history_file, 'w', encoding='utf-8') as f:
+            temp_file = self._history_file.with_suffix('.tmp')
+            with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(all_entries, f, ensure_ascii=False, indent=2)
             
+            temp_file.replace(self._history_file)
+            
+            logger.debug(f"Saved {len(self._entries)} entries to {self._history_file}")
             self._entries.clear()
             return True
-        except Exception:
+            
+        except PermissionError as e:
+            logger.error(f"Permission denied saving history: {e}")
+            return False
+        except OSError as e:
+            logger.error(f"OS error saving history: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error saving history: {e}")
             return False
     
-    def _load_existing(self) -> List[dict]:
-        """Load existing history entries from file."""
+    def _load_existing(self) -> list[dict[str, Any]]:
+        """Load existing history entries from file.
+        
+        Returns:
+            List of history entry dictionaries
+        """
         if not self._history_file.exists():
             return []
         
         try:
             with open(self._history_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data if isinstance(data, list) else []
-        except Exception:
+                if isinstance(data, list):
+                    return data
+                logger.warning(f"History file contains invalid format: {type(data)}")
+                return []
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in history file: {e}")
+            return []
+        except PermissionError as e:
+            logger.error(f"Permission denied reading history: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Error loading history: {e}")
             return []
     
-    def load_all(self) -> List[dict]:
-        """Load all history from file."""
+    def load_all(self) -> list[dict[str, Any]]:
+        """Load all history from file.
+        
+        Returns:
+            List of all history entries
+        """
         return self._load_existing()
     
-    def get_stats(self) -> dict:
-        """Get statistics about the history."""
+    def get_stats(self) -> dict[str, Any]:
+        """Get statistics about the history.
+        
+        Returns:
+            Dictionary with total count, languages breakdown, and total duration
+        """
         all_entries = self._load_existing() + [asdict(e) for e in self._entries]
         
         if not all_entries:

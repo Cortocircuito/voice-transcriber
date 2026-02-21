@@ -4,6 +4,7 @@ import time
 import unicodedata
 from typing import Optional
 
+from rich.align import Align
 from rich.box import ROUNDED
 from rich.console import Console
 from rich.panel import Panel
@@ -15,6 +16,7 @@ from .i18n import get_text, get_language_label
 
 console = Console()
 BOX_STYLE = ROUNDED
+MIN_MENU_WIDTH = 40
 
 
 def _display_width(text: str) -> int:
@@ -46,22 +48,24 @@ class UI:
             border_style=border_style,
             padding=(0, 2),
             expand=True,
-            width=console.width,
         )
 
     def _build_menu_content(self, items: list[tuple[str, str, str]]) -> str:
         """Build menu content with aligned items."""
-        max_width = max(_display_width(f"  {num}  {emoji}  {label}") for num, emoji, label in items)
+        max_item_width = max(
+            _display_width(f"  {num}  {emoji}  {label}") for num, emoji, label in items
+        )
         console_width = console.width - 4
-        width = max(max_width, console_width - 10)
-        
+        width = max(max_item_width, console_width - 10, MIN_MENU_WIDTH)
+
         lines = [""]
         for num, emoji, label in items:
             line = f"  {num}  {emoji}  {label}"
-            padding = width - _display_width(line)
-            lines.append(line + " " * padding)
+            line_width = _display_width(line)
+            padding = width - line_width
+            lines.append(line + " " * max(0, padding))
             lines.append("")
-        
+
         return "\n".join(lines)
 
     def show_menu(self) -> str:
@@ -196,10 +200,10 @@ class UI:
         current = self.config.model_size
 
         items = [
-            ("[1]", "⚡", f"tiny   (~75MB)  {'✓' if current == 'tiny' else ''}"),
-            ("[2]", "📦", f"base   (~150MB) {'✓' if current == 'base' else ''}"),
-            ("[3]", "🚀", f"small  (~500MB) {'✓' if current == 'small' else ''}"),
-            ("[4]", "💪", f"medium (~1.5GB) {'✓' if current == 'medium' else ''}"),
+            ("[1]", "⚡", f"{get_text('model_tiny', lang)}  {'✓' if current == 'tiny' else ''}"),
+            ("[2]", "📦", f"{get_text('model_base', lang)}  {'✓' if current == 'base' else ''}"),
+            ("[3]", "🚀", f"{get_text('model_small', lang)}  {'✓' if current == 'small' else ''}"),
+            ("[4]", "💪", f"{get_text('model_medium', lang)}  {'✓' if current == 'medium' else ''}"),
             ("[0]", "←", get_text("menu_back", lang)),
         ]
 
