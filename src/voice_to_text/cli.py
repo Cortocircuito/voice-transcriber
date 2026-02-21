@@ -12,9 +12,11 @@ from rich.live import Live
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 from rich.text import Text
 
+from .comparison import TextComparator
 from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS
 from .history import HistoryManager
 from .i18n import get_text, get_language_label
+from .lessons import LessonManager, NetworkError
 from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
@@ -27,6 +29,8 @@ class CLI:
         self.transcriber = Transcriber(model_size=self.config.model_size)
         self.ui = UI(self.config)
         self.history = HistoryManager()
+        self.lesson_manager = LessonManager()
+        self.comparator = TextComparator()
         self._setup_signals()
 
     def _setup_signals(self):
@@ -186,6 +190,110 @@ class CLI:
         bar = "█" * filled + "░" * (width - filled)
         return bar
 
+    def run_lesson_practice(self):
+        """Run the lesson practice mode."""
+        lang = self.config.ui_language
+        lessons = []
+        is_offline = False
+        
+        self.ui.show_lessons_loading()
+        
+        try:
+            lessons = self.lesson_manager.fetch_lessons(use_cache=True)
+        except NetworkError:
+            lessons = self.lesson_manager.get_cached_lessons()
+            is_offline = True
+            if not lessons:
+                self.ui.show_error(get_text("lessons_error", lang))
+                return
+        
+        while True:
+            choice = self.ui.show_lessons_menu(lessons, is_offline)
+            
+            if choice is None:
+                break
+            
+            if choice == -1:
+                self.ui.show_lessons_loading()
+                try:
+                    lessons = self.lesson_manager.fetch_lessons(use_cache=False)
+                    is_offline = False
+                except NetworkError:
+                    self.ui.show_error(get_text("lessons_error", lang))
+                    lessons = self.lesson_manager.get_cached_lessons()
+                    is_offline = True
+                continue
+            
+            if choice < 0 or choice >= len(lessons):
+                continue
+            
+            selected_lesson = lessons[choice]
+            
+            level = self.ui.show_level_selector(selected_lesson)
+            if not level:
+                continue
+            
+            lesson_text = selected_lesson.get_text(level)
+            if not lesson_text:
+                self.ui.show_error(get_text("lessons_error", lang))
+                continue
+            
+            while True:
+                self._run_lesson_session(selected_lesson, lesson_text, level)
+                
+                action = self.ui.show_practice_actions()
+                if action == "n":
+                    break
+                elif action == "s":
+                    return
+
+    def _run_lesson_session(self, lesson, text: str, level: str):
+        """Run a single lesson practice session.
+        
+        Args:
+            lesson: The selected lesson
+            text: The lesson text
+            level: The selected level
+        """
+        lang = self.config.ui_language
+        
+        self.ui.show_lesson_text(text, level)
+        
+        self.ui.show_recording_start()
+        
+        mic_ok, _ = self.recorder.check_microphone()
+        self.ui.show_mic_status(mic_ok)
+        
+        audio_path = self.recorder.start_recording()
+        if not audio_path:
+            self.ui.show_error("Failed to start recording")
+            return
+        
+        self._run_progress(self.config.duration)
+        
+        self.recorder.stop_recording()
+        
+        self.ui.show_transcribing()
+        
+        success, transcribed = self.transcriber.transcribe_streaming(
+            audio_path, self.config, on_segment=None
+        )
+        
+        if not success or not transcribed:
+            self.ui.show_warning(get_text("no_audio", lang))
+            return
+        
+        result = self.comparator.compare(text, transcribed)
+        
+        self.ui.show_comparison(text, transcribed, result)
+        
+        if transcribed.strip():
+            self.history.add_entry(
+                language="en",
+                duration=self.config.duration,
+                text=f"[Practice: {lesson.title[:30]}] {transcribed}",
+            )
+
     def show_menu(self):
         """Show main menu."""
         while True:
@@ -194,8 +302,10 @@ class CLI:
             if choice == "1":
                 self.run_dictation()
             elif choice == "2":
-                self.configure()
+                self.run_lesson_practice()
             elif choice == "3":
+                self.configure()
+            elif choice == "4":
                 self.ui.show_goodbye()
                 break
 

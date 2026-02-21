@@ -74,8 +74,9 @@ class UI:
 
         items = [
             ("[1]", "🎙️", get_text("menu_record", lang)),
-            ("[2]", "⚙️", get_text("menu_config", lang)),
-            ("[3]", "🚪", get_text("menu_exit", lang)),
+            ("[2]", "📚", get_text("menu_practice", lang)),
+            ("[3]", "⚙️", get_text("menu_config", lang)),
+            ("[4]", "🚪", get_text("menu_exit", lang)),
         ]
 
         content = self._build_menu_content(items)
@@ -92,7 +93,7 @@ class UI:
             choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
-            return "3"
+            return "4"
 
     def show_recording_start(self):
         """Show recording start message."""
@@ -315,3 +316,244 @@ class UI:
             return response.strip().lower() in ["y", "yes", "s", "sí", "si"]
         except (EOFError, KeyboardInterrupt):
             return False
+
+    def show_lessons_menu(self, lessons: list, is_offline: bool = False) -> Optional[int]:
+        """Show lesson selection menu.
+        
+        Args:
+            lessons: List of Lesson objects
+            is_offline: Whether we're using cached data
+            
+        Returns:
+            Selected lesson index (0-based), or None for refresh/back
+        """
+        lang = self.config.ui_language
+        
+        if not lessons:
+            lines = [
+                "",
+                f"  [bold yellow]📚 {get_text('lessons_no_cached', lang)}[/bold yellow]",
+                "",
+                "  [R] 🔄 Refresh from web",
+                "  [0] ← Back",
+                "",
+            ]
+            console.print()
+            console.print(self._create_panel("\n".join(lines), border_style="yellow"))
+            
+            try:
+                choice = console.input(f"[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+                if choice.strip().lower() == "r":
+                    return -1
+                return None
+            except (EOFError, KeyboardInterrupt):
+                return None
+        
+        lines = ["", f"  [bold cyan]📚 {get_text('lessons_title', lang)}[/bold cyan]", ""]
+        
+        if is_offline:
+            lines.append(f"  [dim]⚠️  {get_text('lessons_offline', lang)}[/dim]")
+            lines.append("")
+        
+        for i, lesson in enumerate(lessons[:8]):
+            title = lesson.title[:50] + "..." if len(lesson.title) > 50 else lesson.title
+            lines.append(f"  [{i+1}] {title}")
+            lines.append(f"      [dim]{lesson.date}[/dim]")
+            lines.append("")
+        
+        lines.append(f"  [R] 🔄 {get_text('lessons_refresh', lang)}")
+        lines.append(f"  [0] ← {get_text('menu_back', lang)}")
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="blue"))
+        
+        try:
+            choice = console.input(f"\n[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+            choice = choice.strip().lower()
+            
+            if choice == "r":
+                return -1
+            if choice == "0":
+                return None
+            
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(lessons):
+                    return idx
+            except ValueError:
+                pass
+            
+            return None
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def show_level_selector(self, lesson) -> Optional[str]:
+        """Show level selector for a lesson.
+        
+        Args:
+            lesson: Lesson object
+            
+        Returns:
+            Selected level string, or None for back
+        """
+        lang = self.config.ui_language
+        
+        levels = lesson.levels if hasattr(lesson, 'levels') else ["2", "3"]
+        
+        lines = [
+            "",
+            f"  [bold cyan]📖 {get_text('level_selector', lang)}[/bold cyan]",
+            "",
+            f"  [dim]{lesson.title[:60]}[/dim]",
+            "",
+        ]
+        
+        level_labels = {
+            "0": "Beginner",
+            "1": "Elementary", 
+            "2": "Pre-Intermediate",
+            "3": "Intermediate",
+            "4": "Upper-Intermediate",
+            "5": "Advanced",
+            "6": "Proficient",
+        }
+        
+        for level in levels:
+            label = level_labels.get(level, f"Level {level}")
+            lines.append(f"  [{level}] {get_text('level', lang)} {level} - {label}")
+            lines.append("")
+        
+        lines.append(f"  [0] ← {get_text('menu_back', lang)}")
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="cyan"))
+        
+        try:
+            choice = console.input(f"[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+            choice = choice.strip()
+            
+            if choice == "0":
+                return None
+            
+            if choice in levels:
+                return choice
+            
+            return None
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def show_lesson_text(self, text: str, level: str) -> None:
+        """Show lesson text for reading practice.
+        
+        Args:
+            text: Lesson text to display
+            level: Selected level
+        """
+        lang = self.config.ui_language
+        
+        words = text.split()
+        display_text = " ".join(words[:100])
+        if len(words) > 100:
+            display_text += "..."
+        
+        lines = [
+            "",
+            f"  [bold cyan]📖 {get_text('reading_mode', lang)} - {get_text('level', lang)} {level}[/bold cyan]",
+            "",
+            f"  [dim]{get_text('read_aloud', lang)}[/dim]",
+            "",
+        ]
+        
+        text_lines = display_text.split("\n")
+        for line in text_lines[:15]:
+            lines.append(f"  {line}")
+        
+        if len(text_lines) > 15:
+            lines.append(f"  [dim]... ({len(text_lines) - 15} more lines)[/dim]")
+        
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="green"))
+
+    def show_comparison(self, original: str, transcribed: str, result) -> None:
+        """Show comparison results with error highlighting.
+        
+        Args:
+            original: Original lesson text
+            transcribed: User's transcription
+            result: ComparisonResult object
+        """
+        lang = self.config.ui_language
+        
+        accuracy_pct = result.accuracy * 100
+        accuracy_color = "green" if accuracy_pct >= 80 else "yellow" if accuracy_pct >= 60 else "red"
+        
+        lines = [
+            "",
+            f"  [bold cyan]📊 {get_text('comparison_title', lang)}[/bold cyan]",
+            "",
+            f"  [{accuracy_color}]📈 {get_text('accuracy', lang)}: {accuracy_pct:.1f}% ({result.correct_count}/{result.total_count} {get_text('words_correct', lang)})[/{accuracy_color}]",
+            "",
+        ]
+        
+        if result.errors:
+            lines.append(f"  [bold red]❌ {get_text('mispronounced', lang)} ({len(result.errors)}):[/bold red]")
+            lines.append("")
+            
+            for idx, orig, trans in result.errors[:8]:
+                if trans == "(missing)":
+                    lines.append(f"    • \"{orig}\" - {get_text('missed', lang)}")
+                else:
+                    lines.append(f"    • \"{orig}\" → \"{trans}\"")
+            
+            if len(result.errors) > 8:
+                lines.append(f"    [dim]... and {len(result.errors) - 8} more[/dim]")
+            lines.append("")
+        else:
+            lines.append(f"  [bold green]✅ {get_text('no_errors', lang)}[/bold green]")
+            lines.append("")
+        
+        lines.append(f"  [bold]{get_text('comparison_original', lang)}:[/bold]")
+        
+        error_indices = {e[0] for e in result.errors}
+        words = result.original_words[:30]
+        
+        word_display = []
+        for i, word in enumerate(words):
+            if i in error_indices:
+                word_display.append(f"[bold red]{word}[/bold red]")
+            else:
+                word_display.append(f"[green]{word}[/green]")
+        
+        lines.append(f"  {' '.join(word_display)}")
+        
+        if len(result.original_words) > 30:
+            lines.append(f"  [dim]... ({len(result.original_words) - 30} more words)[/dim]")
+        
+        lines.append("")
+        
+        console.print()
+        console.print(self._create_panel("\n".join(lines), border_style="magenta"))
+
+    def show_practice_actions(self) -> str:
+        """Show practice session action prompts.
+        
+        Returns:
+            User's choice: 'r' for retry, 'n' for new lesson, 's' for stop
+        """
+        lang = self.config.ui_language
+        console.print(f"\n[dim][R]{get_text('try_again', lang)} │ [N]{get_text('new_lesson', lang)} │ [S]{get_text('action_exit', lang)}[/dim]")
+        try:
+            action = console.input(f"[bold cyan]{get_text('continue_prompt', lang)}:[/bold cyan] ")
+            return action.strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "s"
+
+    def show_lessons_loading(self) -> None:
+        """Show loading message for lessons."""
+        lang = self.config.ui_language
+        console.print()
+        console.print(f"[bold cyan]📚 {get_text('lessons_loading', lang)}[/bold cyan]")
