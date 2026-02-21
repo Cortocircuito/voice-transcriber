@@ -159,9 +159,10 @@ class TestRecorder:
 
     @patch("voice_to_text.recorder.find_working_microphone")
     @patch.object(Recorder, "validate_prerecording")
+    @patch("voice_to_text.recorder.time.sleep")
     @patch("voice_to_text.recorder.os.path.getsize")
     @patch("voice_to_text.recorder.os")
-    def test_record_with_validation_long_duration(self, mock_os, mock_getsize, mock_validate, mock_find):
+    def test_record_with_validation_long_duration(self, mock_os, mock_getsize, mock_sleep, mock_validate, mock_find):
         mock_find.return_value = "default"
         mock_validate.return_value = (True, "OK")
         mock_getsize.return_value = 64000
@@ -178,14 +179,15 @@ class TestRecorder:
                 mock_run.return_value = mock_result
 
                 recorder = Recorder()
-                result = recorder.record(duration=15)
+                result = recorder.record(duration=15, validate_mic=False)
 
                 assert result is not None
 
     @patch("voice_to_text.recorder.find_working_microphone")
+    @patch("voice_to_text.recorder.time.sleep")
     @patch("voice_to_text.recorder.os.path.getsize")
     @patch("voice_to_text.recorder.os")
-    def test_record_short_duration_skips_validation(self, mock_os, mock_getsize, mock_find):
+    def test_record_short_duration_skips_validation(self, mock_os, mock_getsize, mock_sleep, mock_find):
         mock_find.return_value = "default"
         mock_getsize.return_value = 64000
         mock_os.path.getsize.return_value = 64000
