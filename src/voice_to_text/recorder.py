@@ -150,6 +150,69 @@ class Recorder:
             pass
         return False, None
 
+    def validate_prerecording(self, test_duration: int = 2) -> Tuple[bool, str]:
+        """Validate microphone works before starting a long recording.
+        
+        Args:
+            test_duration: Duration in seconds to test the microphone (default 2s)
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        if not self.check_arecord_available():
+            return False, "arecord not found"
+
+        test_file = tempfile.mktemp(suffix=".wav")
+        
+        try:
+            proc = subprocess.Popen(
+                [
+                    "arecord",
+                    "-D", self.device,
+                    "-f", "S16_LE",
+                    "-r", str(SAMPLE_RATE),
+                    "-c", str(CHANNELS),
+                    "-d", str(test_duration),
+                    test_file,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+            
+            _, stderr = proc.communicate(timeout=test_duration + 2)
+            
+            if proc.returncode != 0:
+                if b"Permission denied" in stderr or proc.returncode == 13:
+                    return False, "Permission denied"
+                if b"no such device" in stderr or b"not found" in stderr:
+                    return False, "Device not found"
+                return False, f"Recording failed (code {proc.returncode})"
+            
+            if not os.path.exists(test_file):
+                return False, "Audio file not created"
+            
+            file_size = os.path.getsize(test_file)
+            if file_size < 1000:
+                return False, "No audio detected - microphone may be muted or disconnected"
+            
+            expected_size = SAMPLE_RATE * CHANNELS * 2 * test_duration
+            if file_size < expected_size * 0.5:
+                return False, f"Audio too quiet or device not working properly"
+            
+            return True, "Microphone validated successfully"
+            
+        except subprocess.TimeoutExpired:
+            return False, "Recording test timed out"
+        except PermissionError:
+            return False, "Permission denied"
+        except Exception as e:
+            return False, f"Validation error: {e}"
+        finally:
+            try:
+                os.unlink(test_file)
+            except Exception:
+                pass
+
     def start_recording(self) -> Optional[str]:
         """Start recording and return audio path."""
         if not self.check_arecord_available():
@@ -197,9 +260,28 @@ class Recorder:
             return True
         return False
 
-    def record(self, duration: int, progress_callback=None) -> Optional[str]:
-        """Record audio for specified duration with optional progress callback."""
+    def record(self, duration: int, progress_callback=None, validate_mic: bool = True) -> Optional[str]:
+        """Record audio for specified duration with optional progress callback.
+        
+        Args:
+            duration: Recording duration in seconds (max 300)
+            progress_callback: Optional callback(current, total)
+            validate_mic: If True, run pre-recording mic validation for longer recordings
+            
+        Returns:
+            Path to recorded audio file, or None if failed
+        """
+        from .config import MAX_DURATION
+        
         self._interrupted = False
+        
+        if duration > MAX_DURATION:
+            duration = MAX_DURATION
+        
+        if duration > 10 and validate_mic:
+            valid, message = self.validate_prerecording(test_duration=2)
+            if not valid:
+                return None
 
         mic_available, _ = self.check_microphone()
         if not mic_available:
@@ -230,6 +312,10 @@ class Recorder:
                 print()
 
             self.stop_recording()
+            
+            if os.path.getsize(audio_path) < 1000:
+                return None
+            
             return audio_path
 
         except Exception:
