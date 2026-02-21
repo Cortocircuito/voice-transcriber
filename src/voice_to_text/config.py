@@ -5,10 +5,10 @@ from typing import Dict, Optional, Tuple
 
 
 SUPPORTED_LANGUAGES: Dict[str, Tuple[str, str]] = {
-    "1": ("en", "Inglés"),
-    "2": ("es", "Español"),
-    "3": ("fr", "Francés"),
-    "4": ("de", "Alemán"),
+    "1": ("en", "English"),
+    "2": ("es", "Spanish"),
+    "3": ("fr", "French"),
+    "4": ("de", "German"),
 }
 
 SUPPORTED_MODELS: Dict[str, Tuple[str, str]] = {
@@ -20,7 +20,7 @@ SUPPORTED_MODELS: Dict[str, Tuple[str, str]] = {
 
 DEFAULT_DURATION = 15
 DEFAULT_LANGUAGE = "en"
-DEFAULT_UI_LANGUAGE = "es"
+DEFAULT_UI_LANGUAGE = "en"
 DEFAULT_MODEL_SIZE = "base"
 SAMPLE_RATE = 16000
 CHANNELS = 1

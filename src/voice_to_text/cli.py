@@ -503,12 +503,6 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Voice to Text - Speech transcription")
     parser.add_argument(
-        "--lang",
-        choices=["es", "en"],
-        default="es",
-        help="UI language (es/en)",
-    )
-    parser.add_argument(
         "--duration",
         type=int,
         default=15,
@@ -531,7 +525,6 @@ def main():
     config = Config(
         duration=args.duration,
         language=args.language,
-        ui_language=args.lang,
     )
     
     cli = CLI(config)

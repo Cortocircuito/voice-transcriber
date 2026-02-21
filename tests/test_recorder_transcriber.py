@@ -25,7 +25,7 @@ class TestConfig:
         config = Config()
         assert config.duration == 15
         assert config.language == "en"
-        assert config.ui_language == "es"
+        assert config.ui_language == "en"
         assert config.recording_device is None
         assert config.model_size == "base"
 
@@ -45,9 +45,9 @@ class TestConfig:
     def test_get_language_label(self):
         config = Config()
         config.language = "en"
-        assert config.get_language_label() == "Inglés"
+        assert config.get_language_label() == "English"
         config.language = "es"
-        assert config.get_language_label() == "Español"
+        assert config.get_language_label() == "Spanish"
 
 
 class TestRecorder:
