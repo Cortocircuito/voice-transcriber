@@ -3,9 +3,13 @@
 import argparse
 import signal
 import sys
+import time
 from typing import Optional
 
+from rich.console import Console, Group
+from rich.live import Live
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from rich.text import Text
 
 from .config import Config, SUPPORTED_LANGUAGES, SUPPORTED_MODELS
 from .i18n import get_text, get_language_label
@@ -104,53 +108,54 @@ class CLI:
 
     def _run_progress(self, duration: int):
         """Run progress bar for recording with real-time audio level."""
-        import time as time_module
+        from rich.style import Style
         
         lang = self.config.ui_language
         lang_label = get_language_label(self.config.language, lang)
+        console = Console()
         
-        with Progress(
+        progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(complete_style="green", finished_style="green"),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
-        ) as progress:
-            task = progress.add_task(
-                f"[cyan]{lang_label} • {duration}s",
-                total=duration,
-            )
+        )
+        task = progress.add_task(f"[cyan]{lang_label} • {duration}s", total=duration)
+        
+        def generate_display():
+            elapsed = time.time() - start_time
+            progress.update(task, completed=min(int(elapsed), duration))
             
-            start_time = time_module.time()
-            while True:
-                elapsed = time_module.time() - start_time
-                if elapsed >= duration:
-                    progress.update(task, completed=duration)
-                    break
-                
-                progress.update(task, completed=int(elapsed))
-                
-                level = self.recorder.get_audio_level()
-                level_bar = self._format_level_bar(level)
-                progress.console.print(f"\r[green]🎤 Level:[/green] {level_bar} {level*100:3.0f}%", end="")
-                
-                time_module.sleep(0.1)
+            level = self.recorder.get_audio_level()
+            level_bar = self._format_level_bar(level)
             
-            progress.console.print()
+            if level > 0.7:
+                color = "red"
+            elif level > 0.4:
+                color = "yellow"
+            else:
+                color = "green"
+            
+            level_display = Text()
+            level_display.append("🎤 ")
+            level_display.append("Level: ")
+            level_display.append(level_bar, style=Style(color=color, bold=True))
+            level_display.append(f"  {level*100:3.0f}%")
+            
+            return Group(progress, level_display)
+        
+        start_time = time.time()
+        with Live(generate_display(), refresh_per_second=10, console=console) as live:
+            while time.time() - start_time < duration:
+                live.update(generate_display())
+                time.sleep(0.1)
 
     def _format_level_bar(self, level: float, width: int = 20) -> str:
         """Format audio level as a visual bar."""
         filled = int(level * width)
         bar = "█" * filled + "░" * (width - filled)
-        
-        if level > 0.7:
-            color = "red"
-        elif level > 0.4:
-            color = "yellow"
-        else:
-            color = "green"
-        
-        return f"[{color}]{bar}[/{color}]"
+        return bar
 
     def show_menu(self):
         """Show main menu."""
