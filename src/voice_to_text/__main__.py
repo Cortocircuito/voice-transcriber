@@ -1,12 +1,6 @@
 """Entry point for voice-to-text CLI."""
 
-from .cli import CLI
-
-
-def main():
-    cli = CLI()
-    cli.run()
-
+from .cli import main
 
 if __name__ == "__main__":
     main()

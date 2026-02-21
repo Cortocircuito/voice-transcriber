@@ -13,6 +13,7 @@ SUPPORTED_LANGUAGES: Dict[str, Tuple[str, str]] = {
 
 DEFAULT_DURATION = 15
 DEFAULT_LANGUAGE = "en"
+DEFAULT_UI_LANGUAGE = "es"
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MIN_DURATION = 1
@@ -24,6 +25,7 @@ DEFAULT_DEVICE = "default"
 class Config:
     duration: int = DEFAULT_DURATION
     language: str = DEFAULT_LANGUAGE
+    ui_language: str = DEFAULT_UI_LANGUAGE
     recording_device: str = DEFAULT_DEVICE
 
     def validate_duration(self, value: str) -> int:
@@ -33,7 +35,6 @@ class Config:
                 return dur
         except ValueError:
             pass
-        print(f"⚠️ Duración inválida. Usando {self.duration}s por defecto.")
         return self.duration
 
     def get_language_label(self) -> str:

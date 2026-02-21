@@ -1,12 +1,17 @@
 """Command-line interface for voice-to-text."""
 
+import argparse
 import signal
 import sys
 from typing import Optional
 
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+
 from .config import Config, SUPPORTED_LANGUAGES
+from .i18n import get_text, get_language_label
 from .recorder import Recorder
 from .transcriber import Transcriber
+from .ui import UI
 
 
 class CLI:
@@ -14,6 +19,7 @@ class CLI:
         self.config = config or Config()
         self.recorder = Recorder(self.config.recording_device)
         self.transcriber = Transcriber()
+        self.ui = UI(self.config)
         self._setup_signals()
 
     def _setup_signals(self):
@@ -21,73 +27,145 @@ class CLI:
 
     def _signal_handler(self, signum, frame):
         self.recorder.interrupt()
+        self.ui.show_goodbye()
+        sys.exit(0)
 
     def configure(self):
-        print()
-        print(f"--- CONFIGURACIÓN (D:{self.config.duration}s | L:{self.config.get_language_label()}) ---")
-        print("1) Duración (segundos)")
-        print("2) Idioma (1:en 2:es 3:fr 4:de)")
-
-        choice = input("Opción: ").strip()
-
-        if choice == "1":
-            new_dur = input(f"Segundos [{self.config.duration}]: ").strip()
-            if new_dur:
-                self.config.duration = self.config.validate_duration(new_dur)
-        elif choice == "2":
-            lang_opt = input("1)Inglés 2)Español 3)Francés 4)Alemán: ").strip()
-            if lang_opt in SUPPORTED_LANGUAGES:
-                self.config.language = SUPPORTED_LANGUAGES[lang_opt][0]
-
-    def run_dictation(self):
+        """Handle configuration menu."""
         while True:
-            print()
-            print(f"--- GRABANDO ({self.config.duration}s, {self.config.get_language_label()}) ---")
-
-            audio_path = self.recorder.record(self.config.duration)
-            if audio_path is None:
-                continue
-
-            self.transcriber.transcribe(audio_path, self.config)
-
-            print("D)uración | I)dioma | S)alir")
-            try:
-                action = input("Continuar: ").strip().lower()
-            except EOFError:
+            choice = self.ui.show_config()
+            
+            if choice == "1":
+                new_duration = self.ui.prompt_duration()
+                if new_duration:
+                    validated = self.config.validate_duration(str(new_duration))
+                    if validated != self.config.duration:
+                        self.config.duration = validated
+                        self.ui.show_success(f"{self.config.duration}s")
+            elif choice == "2":
+                lang_code = self.ui.show_language_selector()
+                if lang_code:
+                    self.config.language = lang_code
+                    lang_label = get_language_label(lang_code, self.config.ui_language)
+                    self.ui.show_success(lang_label)
+            else:
                 break
 
+    def run_dictation(self):
+        """Run the dictation loop."""
+        while True:
+            self.ui.show_recording_start()
+            
+            mic_ok, level = self.recorder.check_microphone()
+            self.ui.show_mic_status(mic_ok)
+            
+            audio_path = self.recorder.start_recording()
+            if not audio_path:
+                self.ui.show_error("Failed to start recording")
+                continue
+
+            self._run_progress(self.config.duration)
+            
+            self.recorder.stop_recording()
+            
+            success, text = self.transcriber.transcribe(audio_path, self.config)
+            self.ui.show_transcription(text if text else "")
+            
+            action = self.ui.show_actions()
+            
             if action == "d":
-                new_dur = input(f"Segundos [{self.config.duration}]: ").strip()
-                if new_dur:
-                    self.config.duration = self.config.validate_duration(new_dur)
+                new_duration = self.ui.prompt_duration()
+                if new_duration:
+                    validated = self.config.validate_duration(str(new_duration))
+                    if validated != self.config.duration:
+                        self.config.duration = validated
             elif action == "i":
-                lang_opt = input("1)en 2)es 3:fr 4:de: ").strip()
-                if lang_opt in SUPPORTED_LANGUAGES:
-                    self.config.language = SUPPORTED_LANGUAGES[lang_opt][0]
+                lang_code = self.ui.show_language_selector()
+                if lang_code:
+                    self.config.language = lang_code
             elif action == "s":
                 break
 
+    def _run_progress(self, duration: int):
+        """Run progress bar for recording."""
+        lang = self.config.ui_language
+        lang_label = get_language_label(self.config.language, lang)
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(complete_style="green", finished_style="green"),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task(
+                f"[cyan]{lang_label} • {duration}s",
+                total=duration,
+            )
+            for _ in range(duration):
+                import time
+                time.sleep(1)
+                progress.update(task, advance=1)
+
     def show_menu(self):
+        """Show main menu."""
         while True:
-            print()
-            print("=== MENÚ ===")
-            print("1) Grabar")
-            print(f"2) Configurar (D:{self.config.duration}s L:{self.config.get_language_label()})")
-            print("3) Salir")
-
-            try:
-                opt = input("Opción: ").strip()
-            except EOFError:
-                break
-
-            if opt == "1":
+            choice = self.ui.show_menu()
+            
+            if choice == "1":
                 self.run_dictation()
-            elif opt == "2":
+            elif choice == "2":
                 self.configure()
-            elif opt == "3":
-                print("¡Hasta luego!")
+            elif choice == "3":
+                self.ui.show_goodbye()
                 break
 
     def run(self):
-        print("Entorno activado. Ctrl+C para salir.")
+        """Run the CLI application."""
+        console = self.ui.console if hasattr(self.ui, 'console') else None
+        from rich.console import Console
+        console = Console()
+        
+        console.print()
+        console.print(f"[dim]{get_text('ready', self.config.ui_language)}[/dim]")
+        
+        self.transcriber.load_model()
         self.show_menu()
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Voice to Text - Speech transcription")
+    parser.add_argument(
+        "--lang",
+        choices=["es", "en"],
+        default="es",
+        help="UI language (es/en)",
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=15,
+        help="Recording duration in seconds (default: 15)",
+    )
+    parser.add_argument(
+        "--language",
+        choices=["en", "es", "fr", "de"],
+        default="en",
+        help="Transcription language (default: en)",
+    )
+    
+    args = parser.parse_args()
+    
+    config = Config(
+        duration=args.duration,
+        language=args.language,
+        ui_language=args.lang,
+    )
+    
+    cli = CLI(config)
+    cli.run()
+
+
+if __name__ == "__main__":
+    main()

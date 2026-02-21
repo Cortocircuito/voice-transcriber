@@ -14,6 +14,7 @@ class TestConfig:
         config = Config()
         assert config.duration == 15
         assert config.language == "en"
+        assert config.ui_language == "es"
         assert config.recording_device == "default"
 
     def test_validate_duration_valid(self):
@@ -54,9 +55,10 @@ class TestRecorder:
         mock_run.return_value = mock_result
 
         recorder = Recorder()
-        result = recorder.check_microphone()
+        success, level = recorder.check_microphone()
 
-        assert result is True
+        assert success is True
+        assert level == 0.5
         mock_run.assert_called_once()
 
     @patch("voice_to_text.recorder.subprocess.run")
@@ -64,41 +66,20 @@ class TestRecorder:
         mock_run.side_effect = Exception("Device not found")
 
         recorder = Recorder()
-        result = recorder.check_microphone()
+        success, level = recorder.check_microphone()
 
-        assert result is False
+        assert success is False
+        assert level is None
 
-    @patch("voice_to_text.recorder.subprocess.run")
-    @patch("voice_to_text.recorder.time.sleep")
     @patch("voice_to_text.recorder.subprocess.Popen")
-    def test_record_success(self, mock_popen, mock_sleep, mock_run):
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
-
+    def test_start_recording(self, mock_popen):
         mock_proc = MagicMock()
         mock_popen.return_value = mock_proc
 
         recorder = Recorder()
-        result = recorder.record(1)
+        result = recorder.start_recording()
 
         assert result is not None
-        assert result.endswith(".wav")
-
-    @patch("voice_to_text.recorder.subprocess.run")
-    @patch("voice_to_text.recorder.time.sleep")
-    @patch("voice_to_text.recorder.subprocess.Popen")
-    def test_record_interrupted(self, mock_popen, mock_sleep, mock_run):
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_run.return_value = mock_result
-
-        mock_proc = MagicMock()
-        mock_popen.return_value = mock_proc
-
-        recorder = Recorder()
-        result = recorder.record(5)
-
         assert result.endswith(".wav")
 
     def test_interrupt(self):
@@ -146,9 +127,10 @@ class TestTranscriber:
 
         transcriber = Transcriber()
         config = Config(language="en")
-        result = transcriber.transcribe("/tmp/test.wav", config)
+        success, text = transcriber.transcribe("/tmp/test.wav", config)
 
-        assert result is True
+        assert success is True
+        assert text == "Hello world"
         mock_unlink.assert_called_once_with("/tmp/test.wav")
 
     @patch("voice_to_text.transcriber.WhisperModel")
@@ -161,9 +143,10 @@ class TestTranscriber:
 
         transcriber = Transcriber()
         config = Config(language="en")
-        result = transcriber.transcribe("/tmp/test.wav", config)
+        success, text = transcriber.transcribe("/tmp/test.wav", config)
 
-        assert result is False
+        assert success is True
+        assert text == ""
 
     @patch("voice_to_text.transcriber.WhisperModel")
     @patch("voice_to_text.transcriber.os.unlink")
@@ -175,9 +158,10 @@ class TestTranscriber:
 
         transcriber = Transcriber()
         config = Config(language="en")
-        result = transcriber.transcribe("/tmp/test.wav", config)
+        success, text = transcriber.transcribe("/tmp/test.wav", config)
 
-        assert result is False
+        assert success is False
+        assert text == ""
 
     @patch("voice_to_text.transcriber.WhisperModel")
     @patch("voice_to_text.transcriber.os.unlink")

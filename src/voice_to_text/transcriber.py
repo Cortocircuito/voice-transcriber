@@ -2,11 +2,15 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
+
+from rich.console import Console
 
 from faster_whisper import WhisperModel
 
 from .config import Config
+
+console = Console()
 
 
 class Transcriber:
@@ -19,7 +23,7 @@ class Transcriber:
     @property
     def model(self) -> WhisperModel:
         if self._model is None:
-            print(f"Cargando modelo Whisper ({self.model_size})...")
+            console.print(f"[dim]⏳ Loading Whisper model ({self.model_size})...[/dim]")
             self._model = WhisperModel(
                 self.model_size,
                 device=self.device,
@@ -27,28 +31,26 @@ class Transcriber:
             )
         return self._model
 
-    def transcribe(self, audio_path: str, config: Config) -> bool:
+    def transcribe(self, audio_path: str, config: Config) -> Tuple[bool, str]:
+        """Transcribe audio file. Returns (success, text)."""
         try:
             segments, _ = self.model.transcribe(audio_path, language=config.language)
             text = "\n".join(segment.text.strip() for segment in segments)
-
-            if not text:
-                print("-" * 35)
-                print("⚠️ No se detectó ningún audio. ¿Hablaste durante la grabación?")
-                print("-" * 35)
-                return False
-
-            print("-" * 35)
-            print(f"✅ Transcripción ({config.get_language_label()}):")
-            print(text)
-            print("-" * 35)
-            return True
+            return True, text
 
         except Exception as e:
-            print(f"Error transcribiendo: {e}")
-            return False
+            console.print(f"[red]Error transcribing: {e}[/red]")
+            return False, ""
         finally:
             try:
                 os.unlink(audio_path)
             except Exception:
                 pass
+
+    def load_model(self) -> bool:
+        """Pre-load the model."""
+        try:
+            _ = self.model
+            return True
+        except Exception:
+            return False

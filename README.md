@@ -1,16 +1,18 @@
 # Voice to Text
 
-A simple voice-to-text (Speech to Text) tool using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for audio transcription.
+A beautiful voice-to-text (Speech to Text) tool using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for audio transcription.
 
 ## Features
 
-- Real-time audio recording with configurable duration
-- Fast transcription using faster-whisper
-- Multi-language transcription support (English, Spanish, French, German)
-- Real-time countdown during recording
-- Duration input validation
-- Empty transcription detection
-- Modular and testable Python codebase
+- 🎤 Real-time audio recording with configurable duration
+- ⚡ Fast transcription using faster-whisper
+- 🌍 Multi-language UI (Spanish/English)
+- 🗣️ Multi-language transcription (English, Spanish, French, German)
+- 📊 Animated progress bar with Rich
+- 🎨 Beautiful terminal UI with panels and colors
+- ✅ Duration input validation
+- ⚠️ Empty transcription detection
+- 🧪 Fully tested codebase
 
 ## Requirements
 
@@ -37,46 +39,76 @@ source venv/bin/activate
 pip install -e .
 ```
 
-Or install from requirements:
-```bash
-pip install -r requirements.txt
-```
-
 ## Usage
 
-### As a command-line tool
-
+### Spanish UI (default)
 ```bash
 python -m voice_to_text
 ```
 
-Or after installation:
+### English UI
 ```bash
-voice-to-text
+python -m voice_to_text --lang en
 ```
 
-### Menu
-
-```
-=== MENÚ ===
-1) Grabar
-2) Configurar (D:15s L:Inglés)
-3) Salir
+### With custom settings
+```bash
+python -m voice_to_text --lang en --duration 30 --language es
 ```
 
-### Controls
+### CLI Arguments
 
-- **1** - Start recording
-- **2** - Configure duration and language
-- **D** - Change duration during recording
-- **I** - Change language during recording
-- **S** - Return to menu
-- **Ctrl+C** - Exit
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--lang` | UI language (es/en) | es |
+| `--duration` | Recording duration in seconds | 15 |
+| `--language` | Transcription language (en/es/fr/de) | en |
 
-### Configuration
+## Screenshots
 
-- **Duration**: Enter custom seconds (default: 15s, valid: 1-300)
-- **Language**: 1)English 2)Spanish 3)French 4)German
+### Main Menu (Spanish)
+```
+╭─────────────────────────────── 🎤 VOZ A TEXTO ───────────────────────────────╮
+│                                                                              │
+│    [1]     🎙️  Grabar                                                        │
+│    [2]     ⚙️   Configurar                                                   │
+│    [3]     🚪 Salir                                                          │
+│                                                                              │
+╰─────────────────────── Duración: 15s │ Idioma: Inglés ───────────────────────╯
+```
+
+### Main Menu (English)
+```
+╭────────────────────────────── 🎤 VOICE TO TEXT ──────────────────────────────╮
+│                                                                              │
+│    [1]     🎙️  Record                                                        │
+│    [2]     ⚙️   Configure                                                    │
+│    [3]     🚪 Exit                                                           │
+│                                                                              │
+╰───────────────────── Duration: 15s │ Language: English ──────────────────────╯
+```
+
+### Recording with Progress Bar
+```
+╭──────────────────────────────────────────────╮
+│              🎙️  GRABANDO                     │
+│              ¡HABLA AHORA!                    │
+╰──────────────────────────────────────────────╯
+🎤 Mic: ✅ Listo
+   Inglés • 15s  ████████████░░░░░░░░  67%  5s
+```
+
+### Transcription Result
+```
+╭──────────────────────────────────────────────╮
+│     ✅ TRANSCRIPCIÓN (Inglés)                 │
+├──────────────────────────────────────────────┤
+│                                              │
+│   Hello, this is a test of the voice         │
+│   to text application working perfectly.     │
+│                                              │
+╰──────────────────────────────────────────────╯
+```
 
 ## Project Structure
 
@@ -88,13 +120,15 @@ voice-transcriber/
 │       ├── __main__.py      # Entry point
 │       ├── cli.py           # Command-line interface
 │       ├── config.py        # Configuration management
+│       ├── i18n.py          # Internationalization
 │       ├── recorder.py      # Audio recording
-│       └── transcriber.py   # Transcription logic
+│       ├── transcriber.py   # Transcription logic
+│       └── ui.py            # UI components (Rich)
 ├── tests/
 │   ├── __init__.py
-│   └── test_config.py       # Unit tests
+│   ├── test_config.py
+│   └── test_recorder_transcriber.py
 ├── pyproject.toml           # Project metadata
-├── requirements.txt         # Dependencies
 ├── README.md
 └── LICENSE
 ```
@@ -102,20 +136,17 @@ voice-transcriber/
 ## Development
 
 ### Running Tests
-
 ```bash
-pytest
+pytest tests/ -v
 ```
 
 ### Code Formatting
-
 ```bash
 black .
 isort .
 ```
 
 ### Linting
-
 ```bash
 ruff check .
 mypy .
@@ -137,11 +168,21 @@ The application uses `arecord` (ALSA) for audio capture:
 - Sample rate: 16000 Hz
 - Channels: 1 (mono)
 
-If your microphone doesn't work, modify the `recording_device` in `Config`:
+If your microphone doesn't work, you can configure it programmatically:
 ```python
-from voice_to_text import Config
+from voice_to_text import Config, CLI
+
 config = Config(recording_device="hw:0,0")
+cli = CLI(config)
+cli.run()
 ```
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `faster-whisper` | Fast Whisper transcription |
+| `rich` | Beautiful terminal UI |
 
 ## License
 
