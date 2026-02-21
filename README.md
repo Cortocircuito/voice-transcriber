@@ -2,6 +2,10 @@
 
 A beautiful voice-to-text (Speech to Text) tool using [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for audio transcription.
 
+## 📚 Human Documentation
+
+This README.md file contains user-facing documentation for humans using the voice-to-text application.
+
 ## Features
 
 - 🎤 Real-time audio recording with configurable duration

@@ -2,6 +2,10 @@
 
 This document provides guidelines for AI agents working in this repository.
 
+## 🤖 Agent Documentation
+
+This AGENTS.md file contains guidelines specifically for AI agents working on this voice-to-text project.
+
 ## Project Overview
 
 A voice-to-text (Speech to Text) tool using faster-whisper for audio transcription. The project is a Python package with modular architecture following SOLID principles. Features a beautiful terminal UI built with Rich library and full internationalization support.
