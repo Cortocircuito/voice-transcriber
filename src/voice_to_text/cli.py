@@ -262,8 +262,10 @@ class CLI:
                 self.ui.show_error(get_text("lessons_error", lang))
                 return
         
+        page = 0
+        
         while True:
-            choice = self.ui.show_lessons_menu(lessons, is_offline)
+            choice = self.ui.show_lessons_menu(lessons, page=page, per_page=5, is_offline=is_offline)
             
             if choice is None:
                 break
@@ -277,6 +279,15 @@ class CLI:
                     self.ui.show_error(get_text("lessons_error", lang))
                     lessons = self.lesson_manager.get_cached_lessons()
                     is_offline = True
+                page = 0
+                continue
+            
+            if choice == -2:
+                page += 1
+                continue
+            
+            if choice == -3:
+                page = max(0, page - 1)
                 continue
             
             if choice < 0 or choice >= len(lessons):
@@ -306,6 +317,8 @@ class CLI:
                 
                 if action == "new_lesson":
                     break
+                elif action == "main_menu":
+                    return
                 elif action == "exit":
                     return
     
@@ -394,6 +407,9 @@ class CLI:
                     continue
                 else:
                     return "new_lesson"
+            
+            elif action == "main_menu":
+                return "main_menu"
             
             elif action == "duration":
                 new_duration = self.ui.prompt_duration_change(

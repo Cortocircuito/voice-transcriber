@@ -317,15 +317,27 @@ class UI:
         except (EOFError, KeyboardInterrupt):
             return False
 
-    def show_lessons_menu(self, lessons: list, is_offline: bool = False) -> Optional[int]:
-        """Show lesson selection menu.
+    def show_lessons_menu(
+        self,
+        lessons: list,
+        page: int = 0,
+        per_page: int = 5,
+        is_offline: bool = False,
+    ) -> Optional[int]:
+        """Show lesson selection menu with pagination.
         
         Args:
             lessons: List of Lesson objects
+            page: Current page (0-indexed)
+            per_page: Lessons per page
             is_offline: Whether we're using cached data
             
         Returns:
-            Selected lesson index (0-based), or None for refresh/back
+            Selected lesson index (0-based), or:
+            -1 for refresh
+            -2 for next page
+            -3 for previous page
+            None for back
         """
         lang = self.config.ui_language
         
@@ -349,16 +361,34 @@ class UI:
             except (EOFError, KeyboardInterrupt):
                 return None
         
+        total_pages = (len(lessons) + per_page - 1) // per_page
+        start_idx = page * per_page
+        end_idx = min(start_idx + per_page, len(lessons))
+        page_lessons = lessons[start_idx:end_idx]
+        
         lines = ["", f"  [bold cyan]📚 {get_text('lessons_title', lang)}[/bold cyan]", ""]
         
         if is_offline:
             lines.append(f"  [dim]⚠️  {get_text('lessons_offline', lang)}[/dim]")
             lines.append("")
         
-        for i, lesson in enumerate(lessons[:8]):
+        lines.append(f"  [dim]{get_text('page', lang)} {page + 1} {get_text('of', lang)} {total_pages}[/dim]")
+        lines.append("")
+        
+        for i, lesson in enumerate(page_lessons):
+            global_idx = start_idx + i
             title = lesson.title[:50] + "..." if len(lesson.title) > 50 else lesson.title
-            lines.append(f"  [{i+1}] {title}")
+            lines.append(f"  [{global_idx + 1}] {title}")
             lines.append(f"      [dim]{lesson.date}[/dim]")
+            lines.append("")
+        
+        nav_lines = []
+        if page > 0:
+            nav_lines.append(f"[P] ← {get_text('prev_lessons', lang)}")
+        if page < total_pages - 1:
+            nav_lines.append(f"[N] {get_text('next_lessons', lang)} →")
+        if nav_lines:
+            lines.append(f"  {' │ '.join(nav_lines)}")
             lines.append("")
         
         lines.append(f"  [R] 🔄 {get_text('lessons_refresh', lang)}")
@@ -374,7 +404,11 @@ class UI:
             
             if choice == "r":
                 return -1
-            if choice == "0":
+            elif choice == "n" and page < total_pages - 1:
+                return -2
+            elif choice == "p" and page > 0:
+                return -3
+            elif choice == "0":
                 return None
             
             try:
@@ -767,6 +801,7 @@ class UI:
         nav_parts.append(f"[R] {get_text('start_recording', lang)}")
         if start_paragraph > 1:
             nav_parts.append(f"[P] {get_text('prev_paragraph', lang)}")
+        nav_parts.append(f"[M] {get_text('main_menu', lang)}")
         nav_parts.append(f"[B] {get_text('menu_back', lang)}")
         
         nav_str = " │ ".join(nav_parts)
@@ -785,6 +820,8 @@ class UI:
                 return "back"
             elif choice == "d":
                 return "duration"
+            elif choice == "m":
+                return "main_menu"
             elif choice == "b":
                 return "back"
             else:

@@ -86,6 +86,9 @@ TRANSLATIONS = {
     "next_paragraph_short": "F",
     "prev_paragraph": "Previous",
     "lesson_complete": "Lesson Complete!",
+    "main_menu": "Main menu",
+    "prev_lessons": "Prev lessons",
+    "next_lessons": "Next lessons",
 }
 
 
