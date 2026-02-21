@@ -1,7 +1,7 @@
 """Configuration settings for voice-to-text."""
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 
 SUPPORTED_LANGUAGES: Dict[str, Tuple[str, str]] = {
@@ -18,7 +18,7 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 MIN_DURATION = 1
 MAX_DURATION = 300
-DEFAULT_DEVICE = "default"
+DEFAULT_DEVICE: Optional[str] = None
 
 
 @dataclass
@@ -26,7 +26,7 @@ class Config:
     duration: int = DEFAULT_DURATION
     language: str = DEFAULT_LANGUAGE
     ui_language: str = DEFAULT_UI_LANGUAGE
-    recording_device: str = DEFAULT_DEVICE
+    recording_device: Optional[str] = DEFAULT_DEVICE
 
     def validate_duration(self, value: str) -> int:
         try:

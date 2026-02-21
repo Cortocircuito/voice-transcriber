@@ -26,7 +26,7 @@ class TestConfig:
         assert config.duration == 15
         assert config.language == "en"
         assert config.ui_language == "es"
-        assert config.recording_device == "default"
+        assert config.recording_device is None
 
     def test_validate_duration_valid(self):
         config = Config()
@@ -50,7 +50,9 @@ class TestConfig:
 
 
 class TestRecorder:
-    def test_init_default_device(self):
+    @patch("voice_to_text.recorder.find_working_microphone")
+    def test_init_default_device(self, mock_find):
+        mock_find.return_value = "default"
         recorder = Recorder()
         assert recorder.device == "default"
         assert recorder._interrupted is False
@@ -59,8 +61,10 @@ class TestRecorder:
         recorder = Recorder(device="hw:0,0")
         assert recorder.device == "hw:0,0"
 
+    @patch("voice_to_text.recorder.find_working_microphone")
     @patch("voice_to_text.recorder.subprocess.run")
-    def test_check_microphone_success(self, mock_run):
+    def test_check_microphone_success(self, mock_run, mock_find):
+        mock_find.return_value = "default"
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_run.return_value = mock_result
@@ -72,8 +76,10 @@ class TestRecorder:
         assert level == 0.5
         mock_run.assert_called_once()
 
+    @patch("voice_to_text.recorder.find_working_microphone")
     @patch("voice_to_text.recorder.subprocess.run")
-    def test_check_microphone_failure(self, mock_run):
+    def test_check_microphone_failure(self, mock_run, mock_find):
+        mock_find.return_value = "default"
         mock_run.side_effect = Exception("Device not found")
 
         recorder = Recorder()
@@ -87,7 +93,7 @@ class TestRecorder:
         mock_proc = MagicMock()
         mock_popen.return_value = mock_proc
 
-        recorder = Recorder()
+        recorder = Recorder(device="default")
         result = recorder.start_recording()
 
         assert result is not None

@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from .config import CHANNELS, SAMPLE_RATE
 
@@ -30,8 +30,85 @@ class MicrophoneNotFoundError(RecorderError):
     pass
 
 
+def detect_audio_devices() -> List[str]:
+    """Detect available audio recording devices using ALSA."""
+    devices = []
+    
+    if not shutil.which("arecord"):
+        return devices
+    
+    try:
+        result = subprocess.run(
+            ["arecord", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if "card" in line and "device" in line:
+                    parts = line.split(":")
+                    if parts:
+                        card_info = parts[0].strip()
+                        card_num = card_info.split()[1] if len(card_info.split()) > 1 else None
+                        if card_num:
+                            devices.append(f"hw:{card_num},0")
+    except Exception:
+        pass
+    
+    return devices
+
+
+def find_working_microphone() -> Optional[str]:
+    """Find the first working microphone device."""
+    devices = detect_audio_devices()
+    
+    for device in devices:
+        try:
+            result = subprocess.run(
+                [
+                    "arecord",
+                    "-D", device,
+                    "-f", "S16_LE",
+                    "-r", str(SAMPLE_RATE),
+                    "-c", str(CHANNELS),
+                    "-d", "1",
+                    "/dev/null",
+                ],
+                capture_output=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                return device
+        except Exception:
+            continue
+    
+    try:
+        result = subprocess.run(
+            [
+                "arecord",
+                "-D", "default",
+                "-f", "S16_LE",
+                "-r", str(SAMPLE_RATE),
+                "-c", str(CHANNELS),
+                "-d", "1",
+                "/dev/null",
+            ],
+            capture_output=True,
+            timeout=2,
+        )
+        if result.returncode == 0:
+            return "default"
+    except Exception:
+        pass
+    
+    return None
+
+
 class Recorder:
-    def __init__(self, device: str = "default"):
+    def __init__(self, device: Optional[str] = None):
+        if device is None:
+            device = find_working_microphone() or "default"
         self.device = device
         self._interrupted = False
         self._process: Optional[subprocess.Popen] = None
