@@ -1,4 +1,4 @@
-#!/home/ismael/Code/Python/voz_a_texto/whisper_venv/bin/python3
+#!/usr/bin/env python3
 """Voice to Text - Speech transcription using faster-whisper."""
 
 import os
@@ -8,6 +8,12 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
+
+SCRIPT_DIR = Path(__file__).parent.resolve()
+VENV_PYTHON = SCRIPT_DIR.parent / "whisper_venv" / "bin" / "python3"
+
+if VENV_PYTHON.exists() and str(VENV_PYTHON) != sys.executable:
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(Path(__file__).resolve())] + sys.argv[1:])
 
 from faster_whisper import WhisperModel
 
