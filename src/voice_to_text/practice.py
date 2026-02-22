@@ -54,7 +54,9 @@ class PracticeManager:
         page = 0
 
         while True:
-            choice = self.ui.show_lessons_menu(lessons, page=page, per_page=5, is_offline=is_offline)
+            choice = self.ui.show_lessons_menu(
+                lessons, page=page, per_page=5, is_offline=is_offline
+            )
 
             if choice is None:
                 break
@@ -102,7 +104,9 @@ class PracticeManager:
                 continue
 
             while True:
-                action = self._run_lesson_practice_loop(selected_lesson, paragraphs, level)
+                action = self._run_lesson_practice_loop(
+                    selected_lesson, paragraphs, level
+                )
 
                 if action == "new_lesson":
                     break
@@ -133,7 +137,7 @@ class PracticeManager:
         total = len(paragraphs)
 
         for i in range(0, total, per_page):
-            group = paragraphs[i:i + per_page]
+            group = paragraphs[i : i + per_page]
             combined_text = "\n\n".join([p[0] for p in group])
             total_words = sum([p[1] for p in group])
             start_para = i + 1
@@ -173,12 +177,13 @@ class PracticeManager:
                 current_duration=self.config.duration,
             )
 
-            if action == "back":
+            if action == "prev":
                 if current_page > 0:
                     current_page -= 1
-                    continue
-                else:
-                    return "new_lesson"
+                continue
+
+            elif action == "back":
+                return "new_lesson"
 
             elif action == "main_menu":
                 return "main_menu"
@@ -198,7 +203,12 @@ class PracticeManager:
 
             elif action == "record":
                 result = self._run_paragraph_recording(
-                    lesson, page_text, page_duration, start_para, end_para, len(paragraphs)
+                    lesson,
+                    page_text,
+                    page_duration,
+                    start_para,
+                    end_para,
+                    len(paragraphs),
                 )
 
                 if result == "next":
@@ -290,10 +300,9 @@ class PracticeManager:
                 self.ui.show_last_paragraph_actions()
 
             try:
-                from rich.console import Console
-
-                console = Console()
-                action = console.input(f"[bold cyan]{get_text('option', lang)}:[/bold cyan] ")
+                action = self.ui.console.input(
+                    f"[bold cyan]{get_text('option', lang)}:[/bold cyan] "
+                )
                 action = action.strip().lower()
             except (EOFError, KeyboardInterrupt):
                 return "exit"
