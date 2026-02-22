@@ -60,10 +60,9 @@ class CLI:
         """Cleanup on exit - save history."""
         entries = self.history.get_entries()
         if entries:
-            from rich.console import Console
-
-            console = Console()
-            console.print(f"\n[dim]💾 {get_text('history_saved', self.config.ui_language)}...[/dim]")
+            self.ui.console.print(
+                f"\n[dim]{get_text('history_saved', self.config.ui_language)}...[/dim]"
+            )
         self.history.save()
 
     def _signal_handler(self, signum, frame):
@@ -89,12 +88,10 @@ class CLI:
 
     def run(self, quick: bool = False):
         """Run the CLI application."""
-        from rich.console import Console
-
-        console = Console()
-
-        console.print()
-        console.print(f"[dim]{get_text('ready', self.config.ui_language)}[/dim]")
+        self.ui.console.print()
+        self.ui.console.print(
+            f"[dim]{get_text('ready', self.config.ui_language)}[/dim]"
+        )
 
         self.lesson_manager.preload_lessons_async()
 
@@ -123,7 +120,8 @@ def main():
         help="Transcription language (default: en)",
     )
     parser.add_argument(
-        "--quick", "-q",
+        "--quick",
+        "-q",
         action="store_true",
         help="Start recording immediately (skip menu)",
     )

@@ -12,6 +12,7 @@ from rich.text import Text
 
 from .comparison import TextComparator
 from .config import Config, WORDS_PER_PAGE_MAX, WORDS_PER_PAGE_MIN
+from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_language_label, get_text
 from .recorder import Recorder
@@ -101,11 +102,11 @@ class DictationManager:
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            BarColumn(complete_style="green", finished_style="green"),
+            BarColumn(complete_style=COLOR_SUCCESS, finished_style=COLOR_SUCCESS),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
         )
-        task = progress.add_task(f"[cyan]{lang_label} • {duration}s", total=duration)
+        task = progress.add_task(f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration)
 
         def generate_display():
             elapsed = time.time() - start_time

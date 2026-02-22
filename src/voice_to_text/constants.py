@@ -43,3 +43,17 @@ WORDS_PER_PAGE_MAX = 150
 # Minimum/maximum recording duration
 MIN_DURATION = 1
 MAX_DURATION = 300
+
+# =============================================================================
+# COLOR PALETTE
+# =============================================================================
+# Primary accent color - used for titles, prompts, and highlights
+COLOR_ACCENT = "bright_blue"
+
+# Semantic colors - have specific meaning
+COLOR_SUCCESS = "green"      # Success messages, high accuracy (>=80%)
+COLOR_WARNING = "yellow"     # Warning messages, medium accuracy (60-79%)
+COLOR_ERROR = "red"          # Error messages, low accuracy (<60%), recording
+
+# UI colors
+COLOR_DIM = "dim"            # Secondary text, navigation hints
