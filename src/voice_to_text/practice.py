@@ -6,6 +6,7 @@ from typing import Optional
 
 from .comparison import TextComparator
 from .config import Config, WORDS_PER_MINUTE, WORDS_PER_PAGE_MAX
+from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_text
 from .lessons import Lesson, LessonManager, NetworkError
@@ -301,7 +302,7 @@ class PracticeManager:
 
             try:
                 action = self.ui.console.input(
-                    f"[bold cyan]{get_text('option', lang)}:[/bold cyan] "
+                    f"[bold {COLOR_ACCENT}]{get_text('option', lang)}:[/bold {COLOR_ACCENT}] "
                 )
                 action = action.strip().lower()
             except (EOFError, KeyboardInterrupt):
@@ -341,11 +342,11 @@ class PracticeManager:
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
-            BarColumn(complete_style="green", finished_style="green"),
+            BarColumn(complete_style=COLOR_SUCCESS, finished_style=COLOR_SUCCESS),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
         )
-        task = progress.add_task(f"[cyan]{lang_label} • {duration}s", total=duration)
+        task = progress.add_task(f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration)
 
         start_time = time.time()
         with Live(progress, refresh_per_second=10, console=console) as live:

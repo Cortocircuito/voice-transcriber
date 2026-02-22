@@ -18,10 +18,11 @@ from rich.table import Table
 from rich.text import Text
 
 from .config import Config
+from .constants import COLOR_ACCENT, COLOR_DIM, COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING
 from .i18n import get_text, get_language_label
 
 MAX_WIDTH = 96
-ACCENT = "cyan"
+ACCENT = COLOR_ACCENT  # Alias for backward compatibility
 BOX_STYLE = ROUNDED
 
 
@@ -127,11 +128,11 @@ class UI:
         lang = self.config.ui_language
         if working:
             self.console.print(
-                f"[green]{get_text('mic_check', lang)} {get_text('mic_ready', lang)}[/green]"
+                f"[{COLOR_SUCCESS}]{get_text('mic_check', lang)} {get_text('mic_ready', lang)}[/{COLOR_SUCCESS}]"
             )
         else:
             self.console.print(
-                f"[yellow]{get_text('mic_check', lang)} {get_text('mic_not_found', lang)}[/yellow]"
+                f"[{COLOR_WARNING}]{get_text('mic_check', lang)} {get_text('mic_not_found', lang)}[/{COLOR_WARNING}]"
             )
 
     def show_transcribing(self):

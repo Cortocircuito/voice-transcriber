@@ -10,6 +10,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from faster_whisper import WhisperModel
 
 from .config import Config
+from .constants import COLOR_ACCENT, COLOR_DIM, COLOR_ERROR, COLOR_SUCCESS
 
 console = Console()
 
@@ -54,7 +55,7 @@ class Transcriber:
                 console=console,
             ) as progress:
                 progress.add_task(
-                    f"[cyan]Loading Whisper model ({self.model_size})...",
+                    f"[{COLOR_ACCENT}]Loading Whisper model ({self.model_size})...",
                     total=None,
                 )
                 try:
@@ -76,7 +77,7 @@ class Transcriber:
                     raise ModelLoadError(f"Failed to load model: {e}") from e
                 except Exception as e:
                     raise ModelLoadError(f"Failed to load Whisper model: {e}") from e
-            console.print(f"[green]✓[/green] [dim]Model loaded successfully[/dim]")
+            console.print(f"[{COLOR_SUCCESS}]✓[/{COLOR_SUCCESS}] [{COLOR_DIM}]Model loaded successfully[/{COLOR_DIM}]")
         return self._model
 
     def transcribe(self, audio_path: str, config: Config) -> Tuple[bool, str]:
@@ -100,11 +101,11 @@ class Transcriber:
             Tuple of (success, full_text)
         """
         if not os.path.exists(audio_path):
-            console.print("[red]Error: Audio file not found[/red]")
+            console.print(f"[{COLOR_ERROR}]Error: Audio file not found[/{COLOR_ERROR}]")
             return False, ""
 
         if not os.path.getsize(audio_path) > 0:
-            console.print("[red]Error: Audio file is empty[/red]")
+            console.print(f"[{COLOR_ERROR}]Error: Audio file is empty[/{COLOR_ERROR}]")
             return False, ""
 
         try:
@@ -126,14 +127,14 @@ class Transcriber:
             return False, ""
         except OSError as e:
             if "No space left" in str(e):
-                console.print("[red]Error: Not enough disk space to load model[/red]")
+                console.print(f"[{COLOR_ERROR}]Error: Not enough disk space to load model[/{COLOR_ERROR}]")
             elif "Permission denied" in str(e):
-                console.print("[red]Error: Permission denied accessing model cache[/red]")
+                console.print(f"[{COLOR_ERROR}]Error: Permission denied accessing model cache[/{COLOR_ERROR}]")
             else:
-                console.print(f"[red]Error: OS error during transcription: {e}[/red]")
+                console.print(f"[{COLOR_ERROR}]Error: OS error during transcription: {e}[/{COLOR_ERROR}]")
             return False, ""
         except Exception as e:
-            console.print(f"[red]Error transcribing: {e}[/red]")
+            console.print(f"[{COLOR_ERROR}]Error transcribing: {e}[/{COLOR_ERROR}]")
             return False, ""
         finally:
             try:
