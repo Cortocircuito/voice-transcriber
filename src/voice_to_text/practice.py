@@ -164,6 +164,7 @@ class PracticeManager:
         while current_page < total_pages:
             page_text, page_words, start_para, end_para = pages[current_page]
             page_duration = self._calculate_reading_time(page_words)
+            current_duration = page_duration
 
             action = self.ui.show_paragraph_page(
                 text=page_text,
@@ -172,7 +173,7 @@ class PracticeManager:
                 end_paragraph=end_para,
                 total_paragraphs=len(paragraphs),
                 estimated_duration=page_duration,
-                current_duration=self.config.duration,
+                current_duration=current_duration,
             )
 
             if action == "prev":
@@ -188,11 +189,11 @@ class PracticeManager:
 
             elif action == "duration":
                 new_duration = self.ui.prompt_duration_change(
-                    current_duration=self.config.duration,
+                    current_duration=current_duration,
                     calculated_duration=page_duration,
                 )
                 if new_duration:
-                    self.config.duration = new_duration
+                    current_duration = new_duration
                 continue
 
             elif action == "next":
@@ -203,7 +204,7 @@ class PracticeManager:
                 result = self._run_paragraph_recording(
                     lesson,
                     page_text,
-                    page_duration,
+                    current_duration,
                     start_para,
                     end_para,
                     len(paragraphs),
@@ -343,7 +344,9 @@ class PracticeManager:
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
         )
-        task = progress.add_task(f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration)
+        task = progress.add_task(
+            f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration
+        )
 
         start_time = time.time()
         with Live(progress, refresh_per_second=10, console=console) as live:
