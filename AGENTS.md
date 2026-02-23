@@ -1,346 +1,280 @@
-# AGENTS.md - Voice to Text Project
+# AGENTS.md - Guidelines for AI Agents
 
-This document provides guidelines for AI agents working in this repository.
-
-## 🤖 Agent Documentation
-
-This AGENTS.md file contains guidelines specifically for AI agents working on this voice-to-text project.
+This file provides guidelines for AI agents working on this codebase.
 
 ## Project Overview
 
-A voice-to-text (Speech to Text) tool using faster-whisper for audio transcription. The project is a Python package with modular architecture following SOLID principles. Features a beautiful terminal UI built with Rich library and full internationalization support.
+Voice-to-text is a Python CLI application for speech transcription using faster-whisper. It provides an interactive terminal UI for dictation and lesson practice modes.
 
-## Build/Lint/Test Commands
+## Build, Lint, and Test Commands
 
-### Running the Application
-
-```bash
-# English UI (default)
-python -m voice_to_text
-
-# Spanish UI
-python -m voice_to_text --lang es
-```
-
-### Installation
-
-```bash
-# Install in development mode
-pip install -e .
-
-# Install with dev dependencies
-pip install -e ".[dev]"
-```
-
-### Testing
+### Running Tests
 
 ```bash
 # Run all tests
 pytest
 
-# Run with coverage
-pytest --cov=voice_to_text
-
 # Run a single test file
 pytest tests/test_config.py
 
-# Run with verbose output
-pytest -v
+# Run a single test
+pytest tests/test_config.py::TestConfig::test_default_values
+
+# Run with coverage
+pytest --cov=src/voice_to_text --cov-report=term-missing
 ```
 
 ### Linting and Formatting
 
 ```bash
-# Format code with black
-black .
+# Run ruff linter
+ruff check src/
 
-# Sort imports with isort
-isort .
+# Run ruff with auto-fix
+ruff check src/ --fix
 
-# Lint with ruff
-ruff check .
+# Run black formatter
+black src/
 
-# Type check with mypy
-mypy .
+# Run isort import sorter
+isort src/
+
+# Run mypy type checker
+mypy src/
+
+# Run all pre-commit hooks
+pre-commit run --all-files
 ```
 
-## Git Commit Messages
+### Running the Application
 
-### Format
+```bash
+# Install the package
+pip install -e .
 
-Use conventional commits format:
+# Run the CLI
+voice-to-text
 
+# Or run directly
+python -m voice_to_text
 ```
-<type>: <subject>
-
-[optional body]
-```
-
-### Types
-
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `refactor` | Code refactoring |
-| `test` | Adding/updating tests |
-| `chore` | Maintenance, deps, build |
-
-### Rules
-
-- Use lowercase after the colon
-- Keep subject line under 72 characters
-- Use imperative mood ("add feature" not "added feature")
-- Reference issues when applicable (e.g., "fix #123")
-- Add body for complex changes
-
-### Examples
-
-```
-feat: add lesson practice mode with pronunciation comparison
-
-fix: add missing imports in ui.py
-
-docs: update README with new features
-
-refactor: simplify transcription error handling
-```
-
-## Architecture
-
-### Module Structure
-
-```
-voice_to_text/
-├── __init__.py      # Package initialization, version
-├── __main__.py      # Entry point (python -m voice_to_text)
-├── cli.py           # CLI class - handles user interaction
-├── comparison.py    # Text comparison for pronunciation analysis
-├── config.py        # Config dataclass - settings management
-├── history.py       # Transcription history manager
-├── i18n.py          # Internationalization - translations
-├── lessons.py       # Lesson fetching & management from web
-├── recorder.py      # Recorder class - audio recording
-├── transcriber.py   # Transcriber class - transcription
-└── ui.py            # UI class - Rich console components
-```
-
-### Classes
-
-| Class | Responsibility |
-|-------|---------------|
-| `Config` | Manages duration, language, ui_language, and device settings |
-| `Recorder` | Handles audio recording via arecord |
-| `Transcriber` | Manages Whisper model and transcription |
-| `CLI` | Command-line interface and user interaction |
-| `UI` | Rich console components for beautiful output |
-| `LessonManager` | Fetches and caches lessons from Breaking News English |
-| `Lesson` | Dataclass representing a lesson with levels and paragraphs |
-| `TextComparator` | Compares transcribed text with original for accuracy |
-
-### Key Features
-
-- **Internationalization**: Full i18n support via `i18n.py` with Spanish/English translations
-- **Rich UI**: Beautiful terminal output with panels, progress bars, and colors
-- **Modular Design**: Each class has a single responsibility
-- **Lesson Practice**: Paragraph-by-paragraph reading practice with pronunciation feedback
 
 ## Code Style Guidelines
 
-### Python Code
+### General Rules
 
-#### Imports
+- **Line length**: 88 characters (configured in black/ruff)
+- **Python version**: 3.10+
+- **Type hints**: Use type hints for all function signatures
+- **Docstrings**: Use Google-style docstrings for public functions
+
+### Import Organization
+
+Organize imports in the following order (use isort to enforce):
+
+1. Standard library imports
+2. Third-party imports
+3. Local application imports
+
+Within each group, alphabetize by module name.
 
 ```python
-# Standard library
+# Correct
+import logging
 import os
-import sys
+from typing import Optional
 
-# Third-party packages
 from rich.console import Console
-from faster_whisper import WhisperModel
 
-# Local modules
-from .config import Config
+from voice_to_text.config import Config
+from voice_to_text.ui import UI
 ```
 
-- Group imports: standard library, third-party, local
-- Sort alphabetically within each group
-- Use absolute imports for package modules
-- Use explicit imports (avoid `from module import *`)
+### Naming Conventions
 
-#### Formatting
+- **Modules**: `snake_case` (e.g., `my_module.py`)
+- **Classes**: `PascalCase` (e.g., `MyClass`)
+- **Functions/variables**: `snake_case` (e.g., `my_function`, `my_variable`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_DURATION`)
+- **Private methods**: prefix with `_` (e.g., `_private_method`)
 
-- Use 4 spaces for indentation (no tabs)
-- Maximum line length: 88 characters (black default)
-- Use double quotes for strings
-- Add trailing commas in multi-line collections
+### Type Hints
 
-#### Types
-
-- Use type hints for all function signatures:
+Always use type hints in function signatures:
 
 ```python
-def transcribe(
-    audio_path: str,
-    config: Config,
-) -> Tuple[bool, str]:
+# Good
+def my_function(name: str, value: int) -> Optional[str]:
+    ...
+
+# Avoid
+def my_function(name, value):
     ...
 ```
 
-- Use `Optional[T]` for optional parameters
-- Use `Tuple[A, B]` for return tuples
-- Use `list[T]`, `dict[K, V]` instead of `List`, `Dict`
+### Custom Exceptions
 
-#### Naming Conventions
+Create custom exceptions inheriting from the appropriate base class:
 
-- Variables and functions: `snake_case`
-- Classes: `PascalCase`
-- Constants: `UPPER_SNAKE_CASE`
-- Private members: `_leading_underscore`
+```python
+class RecorderError(Exception):
+    """Base exception for recorder errors."""
+    pass
 
-#### Error Handling
 
-- Use specific exception types
+class MicrophoneNotFoundError(RecorderError):
+    """Raised when no microphone is found."""
+    pass
+```
+
+### Error Handling
+
+- Use specific exception types rather than catching generic `Exception`
 - Provide meaningful error messages
-- Use context managers for resource handling
-- Never use bare `except:` clauses
+- Use logging for errors that don't need to stop execution
 
-#### Docstrings
+```python
+# Good
+try:
+    result = some_function()
+except ValueError as e:
+    logger.error(f"Invalid value: {e}")
+    return None
+```
 
-- Use triple double quotes for docstrings
-- Follow Google style
+### Logging
 
-## Configuration
+Use module-level loggers:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `duration` | 15 | Recording duration in seconds (1-300) |
-| `language` | en | Transcription language (en/es/fr/de) |
-| `ui_language` | es | UI language (en/es) |
-| `recording_device` | default | ALSA recording device |
+```python
+logger = logging.getLogger(__name__)
+```
 
-## Supported Languages
+Log levels:
+- `logger.debug()` - Detailed information for debugging
+- `logger.info()` - Confirmation that things work as expected
+- `logger.warning()` - Something unexpected happened, but continue
+- `logger.error()` - Serious problem, function couldn't perform task
 
-### Transcription Languages
+### Class Structure
 
-| Code | Language |
-|------|----------|
-| en | English |
-| es | Spanish |
-| fr | French |
-| de | German |
+```python
+class MyClass:
+    """Short description of the class.
 
-### UI Languages
+    Longer description if needed.
+    """
 
-| Code | Language |
-|------|----------|
-| es | Spanish |
-| en | English |
+    def __init__(
+        self,
+        param1: str,
+        param2: int,
+        optional_param: Optional[str] = None,
+    ) -> None:
+        self.param1 = param1
+        self.param2 = param2
+        self.optional_param = optional_param
 
-## Dependencies
+    def public_method(self) -> str:
+        """Description of what this method does.
 
-Main Python packages:
+        Returns:
+            Description of return value.
+        """
+        return "result"
 
-- `faster-whisper` - Fast Whisper transcription
-- `rich` - Beautiful terminal UI
-- `ctranslate2` - Transformer inference engine (dependency of faster-whisper)
+    def _private_method(self) -> None:
+        """Internal method, not part of public API."""
+        pass
+```
 
-Dev dependencies:
+### Dataclasses
 
-- `pytest` - Testing framework
-- `black` - Code formatter
-- `isort` - Import sorter
-- `ruff` - Linter
-- `mypy` - Type checker
+Use dataclasses for simple data containers:
 
-## UI Components (Rich)
+```python
+from dataclasses import dataclass
 
-The `ui.py` module provides these UI components:
 
-| Method | Description |
-|--------|-------------|
-| `show_menu()` | Bordered menu panel with options |
-| `show_recording_start()` | Recording start message |
-| `show_progress()` | Animated progress bar |
-| `show_transcription()` | Result panel with border |
-| `show_mic_status()` | Microphone status indicator |
-| `show_config()` | Configuration menu panel |
-| `show_language_selector()` | Language selection table |
-| `show_lessons_menu()` | Lesson selection menu |
-| `show_level_selector()` | Level selection for lessons |
-| `show_paragraph_page()` | Single paragraph display with navigation |
-| `show_comparison()` | Pronunciation comparison results |
-| `show_practice_actions()` | Post-recording action prompts |
+@dataclass
+class MyDataClass:
+    name: str
+    value: int
+    optional_field: Optional[str] = None
+```
 
-## Audio Recording
+### Testing Guidelines
 
-The `Recorder` class uses `arecord` (ALSA) for audio capture:
+- Test files go in `tests/` directory
+- Name test files as `test_<module>.py`
+- Test classes named `Test<ModuleName>`
+- Test methods named `test_<description>`
+- Use descriptive test names that explain what is being tested
 
-- Format: S16_LE (16-bit signed little-endian)
-- Sample rate: 16000 Hz
-- Channels: 1 (mono)
-- Device: `default` (configurable via `recording_device`)
+```python
+class TestConfig:
+    def test_validate_duration_returns_value_when_valid(self):
+        config = Config()
+        assert config.validate_duration("30") == 30
+```
 
-## Lesson Practice System
+### Rich Library Usage
 
-### LessonManager
+The project uses Rich for terminal UI. Key patterns:
 
-The `LessonManager` class fetches lessons from Breaking News English:
+```python
+from rich.console import Console
+from rich.panel import Panel
 
-- Parses homepage to extract available lessons and their level URLs
-- Fetches content for each level (0-6)
-- Caches lessons locally in `~/.config/voice-to-text/lessons/index.json`
-- Provides async preloading for faster startup
+console = Console()
 
-### Lesson Dataclass
+# Print colored text
+console.print("[bold red]Error:[/bold red] Something went wrong")
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | str | Lesson title |
-| `url` | str | Main lesson URL |
-| `date` | str | Publication date |
-| `description` | str | Lesson description |
-| `levels` | list[str] | Available levels (e.g., ["0", "1", "2"]) |
-| `texts` | dict[str, str] | Full text per level |
-| `level_urls` | dict[str, str] | URLs for each level |
-| `paragraphs` | dict[str, list[str]] | Paragraphs per level |
+# Print a panel
+console.print(Panel(content, title="Title"))
+```
 
-### TextComparator
+### Configuration
 
-The `TextComparator` class analyzes pronunciation:
+- All constants go in `src/voice_to_text/constants.py`
+- Config class uses dataclass in `src/voice_to_text/config.py`
+- Internationalization strings in `src/voice_to_text/i18n.py`
 
-- Normalizes text (expands contractions, removes punctuation)
-- Uses difflib for sequence matching
-- Returns accuracy percentage and list of errors
-- Highlights mispronounced words
+## Pre-commit Hooks
 
-### Paragraph Flow
+The project uses pre-commit. Install hooks with:
 
-1. User selects lesson from menu
-2. User selects difficulty level (0-6)
-3. For each paragraph:
-   - Display paragraph with estimated reading time
-   - User presses R to record
-   - App records and transcribes
-   - Show accuracy comparison
-   - User can retry or continue to next paragraph
-4. After all paragraphs: show completion message
+```bash
+pip install -e ".[dev]"
+pre-commit install
+```
 
-## Internationalization (i18n)
+Hooks include:
+- black (formatting)
+- isort (import sorting)
+- ruff (linting)
+- mypy (type checking)
+- bandit (security)
 
-The `i18n.py` module provides:
+## Common Tasks
 
-- `get_text(key, lang)` - Get translated text
-- `get_language_label(lang_code, ui_lang)` - Get language name in UI language
-- `TRANSLATIONS` - Dictionary of all translations
+### Adding a New Feature
 
-## Notes
+1. Create feature branch
+2. Add code to appropriate module in `src/voice_to_text/`
+3. Add tests in `tests/`
+4. Run linters: `ruff check src/ && black src/ && mypy src/`
+5. Run tests: `pytest`
+6. Commit and push
 
-- The project uses English for user-facing text by default
-- UI language can be changed with `--lang en` flag
-- Audio files are temporary and cleaned up after transcription
-- Duration is validated (1-300 seconds)
-- Empty transcription detection warns user
-- Follow SOLID principles for new features
+### Adding Internationalization
+
+1. Add translation keys to `src/voice_to_text/i18n.py`
+2. Use `get_text("key", lang)` in code
+
+### Adding a New Dependency
+
+1. Add to `dependencies` in `pyproject.toml`
+2. Run `pip install -e ".[dev]"` to update
+3. Update this AGENTS.md if adding a new tool/command
