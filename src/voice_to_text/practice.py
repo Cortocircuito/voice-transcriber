@@ -9,7 +9,6 @@ from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_text
 from .lessons import Lesson, LessonManager, NetworkError
-from .phonetics import get_ipa
 from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
@@ -130,7 +129,7 @@ class PracticeManager:
         return result
 
     def _group_paragraphs(self, paragraphs: list, per_page: int = 2) -> list:
-        """Group paragraphs into pages with phonetics."""
+        """Group paragraphs into pages."""
         pages = []
         total = len(paragraphs)
 
@@ -141,9 +140,7 @@ class PracticeManager:
             start_para = i + 1
             end_para = min(i + per_page, total)
 
-            phonetic_text = get_ipa(combined_text)
-
-            pages.append((combined_text, total_words, start_para, end_para, phonetic_text))
+            pages.append((combined_text, total_words, start_para, end_para))
 
         return pages
 
@@ -166,13 +163,12 @@ class PracticeManager:
         page_durations: dict[int, int] = {}
 
         while current_page < total_pages:
-            page_text, page_words, start_para, end_para, phonetic_text = pages[current_page]
+            page_text, page_words, start_para, end_para = pages[current_page]
             page_duration = self._calculate_reading_time(page_words)
             current_duration = page_durations.get(current_page, page_duration)
 
             action = self.ui.show_paragraph_page(
                 text=page_text,
-                phonetic_text=phonetic_text,
                 level=level,
                 start_paragraph=start_para,
                 end_paragraph=end_para,

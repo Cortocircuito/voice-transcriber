@@ -89,6 +89,8 @@ TRANSLATIONS = {
     "prev_lessons": "Prev lessons",
     "next_lessons": "Next lessons",
     "phonetics": "Phonetics (IPA)",
+    "mispronounced_words": "Mispronounced Words",
+    "missing_words": "Missing Words (skipped)",
 }
 
 

@@ -70,3 +70,30 @@ def get_syllable_count(word: str) -> int:
         return syllables if syllables else 0
     except Exception:
         return 0
+
+
+def get_words_phonetics(words: list[str]) -> list[tuple[str, Optional[str]]]:
+    """Get IPA phonetics for a list of words, preserving order.
+
+    Args:
+        words: List of words to get phonetics for
+
+    Returns:
+        List of tuples (word, ipa) where ipa is None if not found in dictionary
+    """
+    result: list[tuple[str, Optional[str]]] = []
+
+    for word in words:
+        word_clean = word.strip()
+        if not word_clean:
+            continue
+
+        word_lower = word_clean.lower()
+        ipa_result = ipa.convert(word_lower)
+
+        if "*" in ipa_result:
+            result.append((word_clean, None))
+        else:
+            result.append((word_clean, ipa_result))
+
+    return result

@@ -26,6 +26,7 @@ from .constants import (
     COLOR_WARNING,
 )
 from .i18n import get_text, get_language_label
+from .phonetics import get_words_phonetics
 
 MAX_WIDTH = 96
 ACCENT = COLOR_ACCENT  # Alias for backward compatibility
@@ -702,6 +703,43 @@ class UI:
                 word + " ", "bold red" if i in trans_error_indices else ""
             )
 
+        transcribed_count = len(transcribed.split()) if transcribed else 0
+
+        mispronounced_words: list[tuple[str, str]] = []
+        missing_in_middle: list[tuple[str, str]] = []
+
+        if hasattr(result, "errors"):
+            for orig_pos, orig_word, error_msg in result.errors:
+                if error_msg != "(missing)":
+                    mispronounced_words.append((orig_pos, orig_word))
+                elif orig_pos < transcribed_count:
+                    missing_in_middle.append((orig_pos, orig_word))
+
+        mispronounced_words.sort(key=lambda x: x[0])
+        missing_in_middle.sort(key=lambda x: x[0])
+
+        mispronounced_text = Text()
+        if mispronounced_words:
+            mispronounced_text.append(f"\n  {get_text('mispronounced_words', lang)}:\n\n", style="bold red")
+            word_list = [w for _, w in mispronounced_words]
+            phonetics = get_words_phonetics(word_list)
+            for word, ipa in phonetics:
+                if ipa:
+                    mispronounced_text.append(f"  {word}  →  /{ipa}/\n", style="red")
+                else:
+                    mispronounced_text.append(f"  {word}  →  (IPA not found)\n", style="dim")
+
+        missing_text = Text()
+        if missing_in_middle:
+            missing_text.append(f"\n  {get_text('missing_words', lang)}:\n\n", style="bold yellow")
+            word_list = [w for _, w in missing_in_middle]
+            phonetics = get_words_phonetics(word_list)
+            for word, ipa in phonetics:
+                if ipa:
+                    missing_text.append(f"  {word}  →  /{ipa}/\n", style="yellow")
+                else:
+                    missing_text.append(f"  {word}  →  (IPA not found)\n", style="dim")
+
         sep = Text("  " + "─" * 50, style="dim")
         accuracy_line = Text()
         accuracy_line.append(
@@ -722,6 +760,8 @@ class UI:
             sep,
             Text(""),
             accuracy_line,
+            mispronounced_text,
+            missing_text,
         )
 
         self.console.print()
@@ -762,7 +802,6 @@ class UI:
     def show_paragraph_page(
         self,
         text: str,
-        phonetic_text: str = "",
         level: str = "3",
         start_paragraph: int = 1,
         end_paragraph: int = 1,
@@ -774,7 +813,6 @@ class UI:
 
         Args:
             text: Combined paragraph text to display
-            phonetic_text: IPA phonetic transcription of the text
             level: Selected level
             start_paragraph: Starting paragraph number (1-indexed)
             end_paragraph: Ending paragraph number
@@ -816,15 +854,8 @@ class UI:
             f"\n  {meta}\n\n"
             f"  [dim]{get_text('read_aloud', lang)}[/dim]\n\n"
             + "\n".join(f"  {line}" for line in text.split("\n")[:20] if line.strip())
+            + "\n"
         )
-
-        if phonetic_text:
-            content += (
-                f"\n\n  [dim cyan]{get_text('phonetics', lang)}[/dim cyan]\n\n"
-                f"  [dim]{phonetic_text}[/dim]"
-            )
-
-        content += "\n"
 
         self.console.print()
         self.console.print(
