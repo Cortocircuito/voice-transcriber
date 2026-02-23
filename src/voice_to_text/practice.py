@@ -91,14 +91,11 @@ class PracticeManager:
             if not level:
                 continue
 
-            paragraphs = selected_lesson.get_paragraphs(level)
-
-            if not paragraphs:
-                lesson_text = selected_lesson.get_text(level)
-                if not lesson_text:
-                    self.ui.show_error(get_text("lessons_error", lang))
-                    continue
-                paragraphs = self._split_into_paragraphs(lesson_text)
+            lesson_text = selected_lesson.get_text(level)
+            if not lesson_text:
+                self.ui.show_error(get_text("lessons_error", lang))
+                continue
+            paragraphs = self._split_into_paragraphs(lesson_text)
 
             if not paragraphs:
                 self.ui.show_error(get_text("lessons_error", lang))

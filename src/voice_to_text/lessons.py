@@ -4,19 +4,17 @@ import json
 import logging
 import os
 import re
-import time
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
+
+from scrapesome import sync_scraper
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://breakingnewsenglish.com"
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 class LessonError(Exception):
@@ -91,97 +89,61 @@ class LessonManager:
         self._executor = ThreadPoolExecutor(max_workers=1)
     
     def _fetch_url(self, url: str, timeout: int = 20) -> str:
-        """Fetch content from URL with human-like behavior.
+        """Fetch content from URL using scrapesome.
         
         Args:
             url: URL to fetch
             timeout: Request timeout in seconds
             
         Returns:
-            HTML content as string
+            Markdown content as string
             
         Raises:
             NetworkError: If request fails
         """
-        time.sleep(0.5 + (0.3 * (hash(url) % 3)))
-        
         try:
-            request = urllib.request.Request(
+            result: Any = sync_scraper(
                 url,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "identity",
-                    "Cache-Control": "max-age=0",
-                    "Connection": "keep-alive",
-                },
+                output_format_type="markdown",
+                timeout=timeout,
             )
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                content = response.read()
-                return content.decode("utf-8", errors="ignore")
-        except urllib.error.HTTPError as e:
-            raise NetworkError(f"HTTP {e.code} error fetching {url}: {e.reason}") from e
-        except urllib.error.URLError as e:
-            raise NetworkError(f"Network error fetching {url}: {e.reason}") from e
+            if isinstance(result, dict):
+                return cast(str, result.get("data", ""))
+            return cast(str, result)
         except Exception as e:
             raise NetworkError(f"Error fetching {url}: {e}") from e
     
-    def _parse_homepage(self, html: str) -> list[dict[str, str]]:
+    def _parse_homepage(self, content: str) -> list[dict[str, Any]]:
         """Parse homepage to extract lesson info.
         
         Args:
-            html: HTML content of homepage
+            content: Markdown content of homepage
             
         Returns:
             List of lesson info dictionaries
         """
-        lessons = []
-        seen_urls = set()
+        lessons: list[dict[str, Any]] = []
+        seen_urls: set[str] = set()
         
-        lesson_block_pattern = r'<div[^>]*class="lesson-excerpt[^"]*"[^>]*>(.*?)</div>\s*</div>'
+        link_pattern = r'\[([^\]]+)\]\(([^)]+\.html)'
         
-        for block_match in re.finditer(lesson_block_pattern, html, re.DOTALL | re.IGNORECASE):
-            block = block_match.group(1)
+        for match in re.finditer(link_pattern, content):
+            title = match.group(1).strip()
+            url = match.group(2).strip()
             
-            level_urls = {}
-            
-            level_links = re.findall(
-                r'<a[^>]+href="([^"]+)"[^>]*>Level\s*(\d+)</a>',
-                block,
-                re.IGNORECASE
-            )
-            
-            for url, level in level_links:
-                if not url.startswith('http'):
-                    url = BASE_URL + "/" + url
-                level_urls[level] = url
-            
-            main_link_match = re.search(r'<a[^>]+href="([^"]+\.html)"[^>]*title="([^"]+)"', block)
-            if not main_link_match:
+            if not re.search(r'\d{6}-', url):
                 continue
             
-            url_path = main_link_match.group(1)
-            title = main_link_match.group(2)
-            
-            if not url_path.startswith('http'):
-                if url_path.startswith('/'):
-                    full_url = BASE_URL + url_path
+            if not url.startswith('http'):
+                if url.startswith('/'):
+                    full_url = BASE_URL + url
                 else:
-                    full_url = BASE_URL + "/" + url_path
+                    full_url = BASE_URL + "/" + url
             else:
-                full_url = url_path
-            
-            if not re.search(r'\d{6}-', full_url):
-                continue
+                full_url = url
             
             if full_url in seen_urls:
                 continue
-            
-            if not level_urls:
-                level_urls = {"3": full_url}
-            
-            seen_urls.add(full_url)
             
             date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})-', full_url)
             if date_match:
@@ -196,6 +158,16 @@ class LessonManager:
             if len(title) < 10:
                 continue
             
+            level_urls: dict[str, str] = {"3": full_url}
+            
+            level_match = re.search(r'Level\s*(\d+)', title)
+            if level_match:
+                level = level_match.group(1)
+                title = re.sub(r'\s*Level\s*\d+\s*$', '', title).strip()
+                level_urls = {level: full_url}
+            
+            seen_urls.add(full_url)
+            
             lessons.append({
                 "title": title,
                 "url": full_url,
@@ -203,62 +175,13 @@ class LessonManager:
                 "level_urls": level_urls,
             })
         
-        if not lessons:
-            patterns = [
-                r'<a[^>]+href="(\d{4}/\d{6}-[^"]+\.html)"[^>]*>([^<]+)</a>',
-                r'<article[^>]*>.*?<h3><a href="([^"]+\.html)"[^>]*>([^<]+)</a></h3>',
-                r'href="([^"]*\d{6}[^"]*\.html)"[^>]*>([^<]{20,}?)</a>',
-            ]
-            
-            for pattern in patterns:
-                for match in re.finditer(pattern, html, re.DOTALL | re.IGNORECASE):
-                    url_path, title = match.groups()
-                    
-                    if not url_path.startswith('http'):
-                        if url_path.startswith('/'):
-                            full_url = BASE_URL + url_path
-                        else:
-                            full_url = BASE_URL + "/" + url_path
-                    else:
-                        full_url = url_path
-                    
-                    if not re.search(r'\d{6}-', full_url):
-                        continue
-                    
-                    if full_url in seen_urls:
-                        continue
-                    
-                    seen_urls.add(full_url)
-                    
-                    date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})-', full_url)
-                    if date_match:
-                        year, month, day = date_match.groups()
-                        date_str = f"{day}/{month}/{year[2:]}"
-                    else:
-                        date_str = ""
-                    
-                    title = re.sub(r'\s+', ' ', title).strip()
-                    title = re.sub(r'^\s*-\s*', '', title)
-                    
-                    if len(title) < 10:
-                        continue
-                    
-                    level_urls = {"3": full_url}
-                    
-                    lessons.append({
-                        "title": title,
-                        "url": full_url,
-                        "date": date_str,
-                        "level_urls": level_urls,
-                    })
-        
         return lessons[:10]
     
-    def _extract_reading_text(self, html: str) -> str:
-        """Extract the main reading text from lesson HTML.
+    def _extract_reading_text(self, content: str) -> str:
+        """Extract the main reading text from lesson markdown.
         
         Args:
-            html: HTML content
+            content: Markdown content
             
         Returns:
             Clean reading text
@@ -285,44 +208,39 @@ class LessonManager:
         ]
         
         text_blocks = []
-        
-        content_patterns = [
-            r'>([A-Z][^<]{150,}?[\.\!\?])<',
-            r'<p[^>]*>([A-Z][^<]{100,}?[\.\!\?])</p>',
-        ]
-        
         seen_texts = set()
         
-        for pattern in content_patterns:
-            for match in re.finditer(pattern, html, re.IGNORECASE):
-                text = match.group(1).strip()
-                
-                text = re.sub(r'\s+', ' ', text)
-                text = re.sub(r'\([^)]+\)', '', text)
-                text = re.sub(r'\[[^\]]+\]', '', text)
-                text = re.sub(r'_{2,}', '', text)
-                text = re.sub(r'\s+', ' ', text).strip()
-                
-                if len(text) < 80:
-                    continue
-                
-                text_lower = text.lower()
-                if any(skip in text_lower for skip in skip_patterns):
-                    continue
-                
-                if text_lower.startswith('what do you') or text_lower.startswith('how '):
-                    continue
-                if text_lower.startswith('spend one minute') or text_lower.startswith('complete this'):
-                    continue
-                if text_lower.startswith('who would you') or text_lower.startswith('to what degree'):
-                    continue
-                
-                normalized = ' '.join(text.split()[:10])
-                if normalized in seen_texts:
-                    continue
-                seen_texts.add(normalized)
-                
-                text_blocks.append(text)
+        lines = content.split('\n')
+        for line in lines:
+            line = line.strip()
+            
+            if line.startswith('#') or line.startswith('[') or line.startswith('*'):
+                continue
+            
+            line = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', line)
+            line = re.sub(r'[\*\_]{2,}', '', line)
+            line = re.sub(r'\s+', ' ', line).strip()
+            
+            if len(line) < 80:
+                continue
+            
+            text_lower = line.lower()
+            if any(skip in text_lower for skip in skip_patterns):
+                continue
+            
+            if text_lower.startswith('what do you') or text_lower.startswith('how '):
+                continue
+            if text_lower.startswith('spend one minute') or text_lower.startswith('complete this'):
+                continue
+            if text_lower.startswith('who would you') or text_lower.startswith('to what degree'):
+                continue
+            
+            normalized = ' '.join(line.split()[:10])
+            if normalized in seen_texts:
+                continue
+            seen_texts.add(normalized)
+            
+            text_blocks.append(line)
         
         if text_blocks:
             combined = ' '.join(text_blocks[:8])
@@ -330,33 +248,28 @@ class LessonManager:
         
         return ""
     
-    def _extract_paragraphs(self, html: str) -> list[str]:
+    def _extract_paragraphs(self, content: str) -> list[str]:
         """Extract paragraphs from the article content.
         
         Args:
-            html: HTML content
+            content: Markdown content
             
         Returns:
             List of paragraph strings
         """
-        article_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL | re.IGNORECASE)
-        
-        if not article_match:
-            article_match = re.search(r'<div[^>]*id="[^"]*main[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL | re.IGNORECASE)
-        
-        if not article_match:
-            return []
-        
-        article_content = article_match.group(1)
-        
-        parts = re.split(r'<br\s*/?>\s*<br\s*/?>', article_content)
-        
         paragraphs = []
         
-        for part in parts:
-            text = re.sub(r'<[^>]+>', '', part)
-            text = re.sub(r'\s+', ' ', text)
-            text = text.strip()
+        blocks = re.split(r'\n\s*\n', content)
+        
+        for block in blocks:
+            block = block.strip()
+            
+            if block.startswith('#') or block.startswith('['):
+                continue
+            
+            text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', block)
+            text = re.sub(r'[\*\_]{2,}', '', text)
+            text = re.sub(r'\s+', ' ', text).strip()
             
             if len(text) < 20:
                 continue
@@ -372,7 +285,7 @@ class LessonManager:
             paragraphs.append(text)
         
         if not paragraphs:
-            full_text = self._extract_reading_text(html)
+            full_text = self._extract_reading_text(content)
             if full_text:
                 paras = re.split(r'(?<=[.!?])\s+', full_text)
                 paragraphs = [p.strip() for p in paras if len(p.strip()) > 20]
@@ -411,10 +324,10 @@ class LessonManager:
             url = base_info["url"]
         
         try:
-            html = self._fetch_url(url)
-            text = self._extract_reading_text(html)
-            paragraphs = self._extract_paragraphs(html)
-            description = self._extract_description(html)
+            content = self._fetch_url(url)
+            text = self._extract_reading_text(content)
+            paragraphs = self._extract_paragraphs(content)
+            description = self._extract_description(content)
             
             if not text and paragraphs:
                 text = " ".join(paragraphs)
@@ -440,8 +353,8 @@ class LessonManager:
         
         try:
             logger.info("Fetching lessons from Breaking News English...")
-            html = self._fetch_url(BASE_URL)
-            lesson_infos = self._parse_homepage(html)
+            content = self._fetch_url(BASE_URL)
+            lesson_infos = self._parse_homepage(content)
             
             logger.info(f"Found {len(lesson_infos)} lesson links")
             
@@ -450,9 +363,12 @@ class LessonManager:
                 try:
                     logger.debug(f"Fetching lesson {i+1}/{min(6, len(lesson_infos))}: {info['title'][:40]}")
                     
-                    level_urls = info.get("level_urls")
-                    if not isinstance(level_urls, dict):
+                    level_urls_raw = info.get("level_urls")
+                    level_urls: dict[str, str]
+                    if not isinstance(level_urls_raw, dict):
                         level_urls = {"3": info["url"]}
+                    else:
+                        level_urls = level_urls_raw
                     levels = sorted(level_urls.keys(), key=lambda x: int(x))
                     
                     texts = {}
@@ -506,14 +422,21 @@ class LessonManager:
                     return cached
             raise
     
-    def _extract_description(self, html: str) -> str:
-        """Extract lesson description from HTML."""
-        meta_pattern = r'<meta[^>]+name="description"[^>]+content="([^"]+)"'
-        match = re.search(meta_pattern, html, re.IGNORECASE)
+    def _extract_description(self, content: str) -> str:
+        """Extract lesson description from markdown content."""
+        match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
         if match:
-            desc = match.group(1).strip()
-            desc = re.sub(r'Breaking News English.*', '', desc, flags=re.IGNORECASE)
-            return desc.strip()
+            title = match.group(1).strip()
+            title = re.sub(r'Breaking News English.*', '', title, flags=re.IGNORECASE)
+            return title.strip()
+        
+        lines = content.split('\n')
+        for line in lines[:5]:
+            line = line.strip()
+            if line and not line.startswith('#') and len(line) > 20:
+                line = re.sub(r'Breaking News English.*', '', line, flags=re.IGNORECASE)
+                return line.strip()
+        
         return ""
     
     def _save_cache(self, lessons: list[Lesson]) -> bool:
@@ -600,7 +523,8 @@ class LessonManager:
         """Get lessons, waiting for preload if necessary."""
         if self._preload_future is not None:
             try:
-                return self._preload_future.result(timeout=30)
+                result = self._preload_future.result(timeout=30)
+                return cast(list[Lesson], result)
             except Exception:
                 pass
         return self._load_cache()
