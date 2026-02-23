@@ -18,7 +18,13 @@ from rich.table import Table
 from rich.text import Text
 
 from .config import Config
-from .constants import COLOR_ACCENT, COLOR_DIM, COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING
+from .constants import (
+    COLOR_ACCENT,
+    COLOR_DIM,
+    COLOR_ERROR,
+    COLOR_SUCCESS,
+    COLOR_WARNING,
+)
 from .i18n import get_text, get_language_label
 
 MAX_WIDTH = 96
@@ -632,7 +638,7 @@ class UI:
             calculated_duration: Calculated duration based on text
 
         Returns:
-            New duration or None
+            New duration or current_duration if no input
         """
         lang = self.config.ui_language
 
@@ -648,16 +654,16 @@ class UI:
 
         try:
             value = self.console.input(
-                f"[bold {ACCENT}]{get_text('set_duration', lang)} [{calculated_duration}]: [/bold {ACCENT}] "
+                f"[bold {ACCENT}]{get_text('set_duration', lang)} [{current_duration}]: [/bold {ACCENT}] "
             )
             if value.strip():
                 new_duration = int(value.strip())
                 if new_duration > 0:
                     return new_duration
+                return current_duration
+            return current_duration
         except (ValueError, EOFError, KeyboardInterrupt):
-            pass
-
-        return None
+            return current_duration
 
     def show_comparison(self, original: str, transcribed: str, result) -> None:
         """Show comparison results with error highlighting.

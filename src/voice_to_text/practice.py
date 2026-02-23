@@ -160,11 +160,12 @@ class PracticeManager:
         pages = self._group_paragraphs(paragraphs, per_page=2)
         total_pages = len(pages)
         current_page = 0
+        page_durations: dict[int, int] = {}
 
         while current_page < total_pages:
             page_text, page_words, start_para, end_para = pages[current_page]
             page_duration = self._calculate_reading_time(page_words)
-            current_duration = page_duration
+            current_duration = page_durations.get(current_page, page_duration)
 
             action = self.ui.show_paragraph_page(
                 text=page_text,
@@ -194,6 +195,7 @@ class PracticeManager:
                 )
                 if new_duration:
                     current_duration = new_duration
+                    page_durations[current_page] = new_duration
                 continue
 
             elif action == "next":
