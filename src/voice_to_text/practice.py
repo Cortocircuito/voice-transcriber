@@ -1,15 +1,15 @@
 """Practice manager for lesson practice mode."""
 
-import re
 import math
-from typing import Optional
+import re
 
 from .comparison import TextComparator
-from .config import Config, WORDS_PER_MINUTE, WORDS_PER_PAGE_MAX
+from .config import Config, WORDS_PER_MINUTE
 from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_text
 from .lessons import Lesson, LessonManager, NetworkError
+from .phonetics import get_ipa
 from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
@@ -130,7 +130,7 @@ class PracticeManager:
         return result
 
     def _group_paragraphs(self, paragraphs: list, per_page: int = 2) -> list:
-        """Group paragraphs into pages."""
+        """Group paragraphs into pages with phonetics."""
         pages = []
         total = len(paragraphs)
 
@@ -140,7 +140,10 @@ class PracticeManager:
             total_words = sum([p[1] for p in group])
             start_para = i + 1
             end_para = min(i + per_page, total)
-            pages.append((combined_text, total_words, start_para, end_para))
+
+            phonetic_text = get_ipa(combined_text)
+
+            pages.append((combined_text, total_words, start_para, end_para, phonetic_text))
 
         return pages
 
@@ -163,12 +166,13 @@ class PracticeManager:
         page_durations: dict[int, int] = {}
 
         while current_page < total_pages:
-            page_text, page_words, start_para, end_para = pages[current_page]
+            page_text, page_words, start_para, end_para, phonetic_text = pages[current_page]
             page_duration = self._calculate_reading_time(page_words)
             current_duration = page_durations.get(current_page, page_duration)
 
             action = self.ui.show_paragraph_page(
                 text=page_text,
+                phonetic_text=phonetic_text,
                 level=level,
                 start_paragraph=start_para,
                 end_paragraph=end_para,
@@ -351,7 +355,7 @@ class PracticeManager:
         )
 
         start_time = time.time()
-        with Live(progress, refresh_per_second=10, console=console) as live:
+        with Live(progress, refresh_per_second=10, console=console):
             while time.time() - start_time < duration:
                 progress.update(task, completed=int(time.time() - start_time))
                 time.sleep(0.1)

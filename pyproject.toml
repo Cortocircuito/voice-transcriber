@@ -27,6 +27,7 @@ dependencies = [
     "rich>=13.0.0",
     "scrapesome>=0.1.0",
     "playwright>=1.40.0",
+    "eng-to-ipa>=0.0.1",
 ]
 
 [project.optional-dependencies]

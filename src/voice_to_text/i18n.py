@@ -78,7 +78,6 @@ TRANSLATIONS = {
     "minutes_short": "min",
     "seconds_short": "sec",
     "record_duration": "Rec. duration",
-    "record_duration": "Rec. duration",
     "set_duration": "Set duration",
     "paragraph": "Paragraph",
     "paragraphs": "Paragraphs",
@@ -89,6 +88,7 @@ TRANSLATIONS = {
     "main_menu": "Main menu",
     "prev_lessons": "Prev lessons",
     "next_lessons": "Next lessons",
+    "phonetics": "Phonetics (IPA)",
 }
 
 

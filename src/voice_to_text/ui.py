@@ -762,17 +762,19 @@ class UI:
     def show_paragraph_page(
         self,
         text: str,
-        level: str,
-        start_paragraph: int,
-        end_paragraph: int,
-        total_paragraphs: int,
-        estimated_duration: int,
-        current_duration: int,
+        phonetic_text: str = "",
+        level: str = "3",
+        start_paragraph: int = 1,
+        end_paragraph: int = 1,
+        total_paragraphs: int = 1,
+        estimated_duration: int = 30,
+        current_duration: int = 30,
     ) -> str:
         """Show a page with 1-2 paragraphs with navigation.
 
         Args:
             text: Combined paragraph text to display
+            phonetic_text: IPA phonetic transcription of the text
             level: Selected level
             start_paragraph: Starting paragraph number (1-indexed)
             end_paragraph: Ending paragraph number
@@ -814,8 +816,15 @@ class UI:
             f"\n  {meta}\n\n"
             f"  [dim]{get_text('read_aloud', lang)}[/dim]\n\n"
             + "\n".join(f"  {line}" for line in text.split("\n")[:20] if line.strip())
-            + "\n"
         )
+
+        if phonetic_text:
+            content += (
+                f"\n\n  [dim cyan]{get_text('phonetics', lang)}[/dim cyan]\n\n"
+                f"  [dim]{phonetic_text}[/dim]"
+            )
+
+        content += "\n"
 
         self.console.print()
         self.console.print(
