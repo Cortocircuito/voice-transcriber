@@ -5,11 +5,13 @@ A Python CLI application for speech transcription using faster-whisper. Provides
 ## Features
 
 - **Dictation Mode**: Record and transcribe your voice in real-time
-- **Lesson Practice**: Practice reading with lessons from Breaking News English
+- **Lesson Practice**: Practice reading with lessons from Breaking News English (7 levels)
 - **Multiple Languages**: Support for English, Spanish, French, and German
 - **Model Options**: Choose from tiny, base, small, or medium Whisper models
 - **Text Comparison**: Compare your transcription with the original text
 - **Progress Tracking**: Visual progress bars during recording
+- **Smart Download**: Prompts to download lessons on first run with async background loading
+- **Quiet Mode**: Clean UI during lesson download with optional verbose logging in Practice mode
 
 ## Requirements
 
@@ -37,6 +39,8 @@ pip install -e ".[dev]"
 voice-to-text
 ```
 
+On first run, if no lessons are cached, you'll be prompted to download lessons from Breaking News English. Lessons are downloaded asynchronously and available while you use the app.
+
 ### Quick Start (Immediate Recording)
 
 ```bash
@@ -63,6 +67,22 @@ voice-to-text --duration 30 --language es
 2. **Practice Reading** - Practice with lesson articles
 3. **Configure** - Change settings
 4. **Exit** - Quit application
+
+## Lesson Practice
+
+Lessons are fetched from [Breaking News English](https://breakingnewsenglish.com) and include:
+
+- **7 Difficulty Levels**: From level 0 (easiest) to level 6 (hardest)
+- **Smart Filtering**: Automatically filters out invalid/error content
+- **Offline Support**: Lessons are cached locally for offline use
+- **Refresh**: Option to refresh and fetch latest lessons
+
+### Lesson Navigation
+
+- `[1-N]` - Select a lesson
+- `[P]` / `[N]` - Previous/Next page
+- `[R]` - Refresh lessons
+- `[0]` - Back to main menu
 
 ## Configuration
 
