@@ -1,5 +1,6 @@
 """Practice manager for lesson practice mode."""
 
+import logging
 import math
 import re
 
@@ -12,6 +13,9 @@ from .lessons import Lesson, LessonManager, NetworkError
 from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
+
+
+LESSONS_LOGGER = "voice_to_text.lessons"
 
 
 class PracticeManager:
@@ -40,6 +44,8 @@ class PracticeManager:
         lessons = []
         is_offline = False
 
+        logging.getLogger(LESSONS_LOGGER).setLevel(logging.INFO)
+
         self.ui.show_lessons_loading()
 
         try:
@@ -47,9 +53,26 @@ class PracticeManager:
         except NetworkError:
             lessons = self.lesson_manager.get_cached_lessons()
             is_offline = True
-            if not lessons:
-                self.ui.show_error(get_text("lessons_error", lang))
-                return
+
+        if not lessons:
+            if self.lesson_manager.preload_succeeded():
+                lessons = self.lesson_manager.get_cached_lessons()
+            elif not self.lesson_manager.is_preloading():
+                if not self.ui.confirm_lesson_download():
+                    logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
+                    return
+                self.ui.show_lessons_loading()
+                try:
+                    lessons = self.lesson_manager.fetch_lessons(use_cache=False)
+                except NetworkError:
+                    self.ui.show_error(get_text("lessons_error", lang))
+                    logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
+                    return
+
+        if not lessons:
+            self.ui.show_error(get_text("lessons_error", lang))
+            logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
+            return
 
         page = 0
 
@@ -108,9 +131,13 @@ class PracticeManager:
                 if action == "new_lesson":
                     break
                 elif action == "main_menu":
+                    logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
                     return
                 elif action == "exit":
+                    logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
                     return
+
+        logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
 
     def _split_into_paragraphs(self, text: str) -> list[tuple[str, int]]:
         """Split text into paragraphs."""

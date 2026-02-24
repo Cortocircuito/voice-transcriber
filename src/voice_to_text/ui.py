@@ -20,8 +20,6 @@ from rich.text import Text
 from .config import Config
 from .constants import (
     COLOR_ACCENT,
-    COLOR_DIM,
-    COLOR_ERROR,
     COLOR_SUCCESS,
     COLOR_WARNING,
 )
@@ -141,6 +139,44 @@ class UI:
             self.console.print(
                 f"[{COLOR_WARNING}]{get_text('mic_check', lang)} {get_text('mic_not_found', lang)}[/{COLOR_WARNING}]"
             )
+
+    def show_lessons_download_progress(self) -> None:
+        """Show indeterminate progress for lesson download."""
+        lang = self.config.ui_language
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=self.console,
+        ) as progress:
+            progress.add_task(
+                f"[{ACCENT}]{get_text('lessons_downloading', lang)}",
+                total=None,
+            )
+            time.sleep(0.5)
+
+    def show_lessons_download_complete(self) -> None:
+        """Show lesson download complete message."""
+        lang = self.config.ui_language
+        self.console.print(
+            f"[{COLOR_SUCCESS}]{get_text('lessons_download_complete', lang)}[/{COLOR_SUCCESS}]"
+        )
+
+    def confirm_lesson_download(self) -> bool:
+        """Ask user if they want to download lessons.
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        lang = self.config.ui_language
+        while True:
+            choice = self.console.input(
+                f"[bold {ACCENT}]{get_text('lessons_download_prompt', lang)}[/bold {ACCENT}] "
+            )
+            choice_lower = choice.strip().lower()
+            if choice_lower in ("y", "yes", get_text("yes", lang).lower()):
+                return True
+            if choice_lower in ("n", "no", get_text("no", lang).lower()):
+                return False
 
     def show_transcribing(self):
         """Show transcription in progress message."""
@@ -720,18 +756,24 @@ class UI:
 
         mispronounced_text = Text()
         if mispronounced_words:
-            mispronounced_text.append(f"\n  {get_text('mispronounced_words', lang)}:\n\n", style="bold red")
+            mispronounced_text.append(
+                f"\n  {get_text('mispronounced_words', lang)}:\n\n", style="bold red"
+            )
             word_list = [w for _, w in mispronounced_words]
             phonetics = get_words_phonetics(word_list)
             for word, ipa in phonetics:
                 if ipa:
                     mispronounced_text.append(f"  {word}  →  /{ipa}/\n", style="red")
                 else:
-                    mispronounced_text.append(f"  {word}  →  (IPA not found)\n", style="dim")
+                    mispronounced_text.append(
+                        f"  {word}  →  (IPA not found)\n", style="dim"
+                    )
 
         missing_text = Text()
         if missing_in_middle:
-            missing_text.append(f"\n  {get_text('missing_words', lang)}:\n\n", style="bold yellow")
+            missing_text.append(
+                f"\n  {get_text('missing_words', lang)}:\n\n", style="bold yellow"
+            )
             word_list = [w for _, w in missing_in_middle]
             phonetics = get_words_phonetics(word_list)
             for word, ipa in phonetics:

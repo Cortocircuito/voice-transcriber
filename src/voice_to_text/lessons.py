@@ -90,6 +90,8 @@ class LessonManager:
         self._cache: dict[str, Lesson] = {}
         self._preload_future: Optional[Future] = None
         self._executor = ThreadPoolExecutor(max_workers=1)
+        self._preload_complete: bool = False
+        self._preload_succeeded: bool = False
 
     def _fetch_url(self, url: str, timeout: int = 20) -> str:
         """Fetch content from URL using scrapesome.
@@ -604,16 +606,33 @@ class LessonManager:
     def preload_lessons_async(self) -> None:
         """Start async preloading of lessons."""
         if self._preload_future is None or self._preload_future.done():
+            self._preload_complete = False
+            self._preload_succeeded = False
             self._preload_future = self._executor.submit(self._preload_task)
             logger.debug("Started async lesson preload")
 
     def _preload_task(self) -> list[Lesson]:
         """Background task to preload lessons."""
         try:
-            return self.fetch_lessons(use_cache=True)
+            lessons = self.fetch_lessons(use_cache=True)
+            self._preload_complete = True
+            self._preload_succeeded = len(lessons) > 0
+            return lessons
         except Exception as e:
             logger.error(f"Preload failed: {e}")
+            self._preload_complete = True
+            self._preload_succeeded = False
             return []
+
+    def is_preloading(self) -> bool:
+        """Check if preload is still running."""
+        if self._preload_future is None:
+            return False
+        return not self._preload_complete
+
+    def preload_succeeded(self) -> bool:
+        """Check if preload completed successfully with lessons."""
+        return self._preload_complete and self._preload_succeeded
 
     def get_preloaded_lessons(self) -> list[Lesson]:
         """Get lessons, waiting for preload if necessary."""

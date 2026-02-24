@@ -2,6 +2,7 @@
 
 import argparse
 import atexit
+import logging
 import signal
 import sys
 from typing import Optional
@@ -18,7 +19,21 @@ from .transcriber import Transcriber
 from .ui import UI
 
 
+LESSONS_LOGGER = "voice_to_text.lessons"
+EXTERNAL_LOGGERS = ["httpx", "httpcore", "urllib3", "faster_whisper"]
+
+
+def _set_quiet_mode(quiet: bool) -> None:
+    """Enable or disable quiet logging mode."""
+    level = logging.CRITICAL + 1 if quiet else logging.INFO
+    logging.root.setLevel(level)
+    for logger_name in EXTERNAL_LOGGERS:
+        logging.getLogger(logger_name).setLevel(level)
+
+
 class CLI:
+    _quiet_mode = False
+
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.recorder = Recorder(self.config.recording_device)
@@ -73,13 +88,23 @@ class CLI:
 
     def show_menu(self):
         """Show main menu."""
+        shown_downloading = False
         while True:
+            if self.lesson_manager.is_preloading():
+                self.ui.show_lessons_download_progress()
+                shown_downloading = True
+            elif shown_downloading and self.lesson_manager.preload_succeeded():
+                self.ui.show_lessons_download_complete()
+                shown_downloading = False
+
             choice = self.ui.show_menu()
 
             if choice == "1":
                 self.dictation_manager.run()
             elif choice == "2":
+                _set_quiet_mode(False)
                 self.practice_manager.run()
+                _set_quiet_mode(CLI._quiet_mode)
             elif choice == "3":
                 self.config_manager.run()
             elif choice == "4":
@@ -93,7 +118,12 @@ class CLI:
             f"[dim]{get_text('ready', self.config.ui_language)}[/dim]"
         )
 
-        self.lesson_manager.preload_lessons_async()
+        cached_lessons = self.lesson_manager.get_cached_lessons()
+        if not cached_lessons:
+            if self.ui.confirm_lesson_download():
+                CLI._quiet_mode = True
+                _set_quiet_mode(True)
+                self.lesson_manager.preload_lessons_async()
 
         self.transcriber.load_model()
 
