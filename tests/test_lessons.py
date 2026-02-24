@@ -405,3 +405,167 @@ class TestLessonErrors:
         """Test NetworkError can be raised."""
         with pytest.raises(NetworkError):
             raise NetworkError("Network failed")
+
+
+class TestLessonLevelFiltering:
+    """Tests for lesson level filtering logic."""
+
+    def test_extract_reading_text_filters_litespeed_content(self):
+        """Test that LiteSpeed placeholder content is filtered out."""
+        manager = LessonManager()
+
+        content = """# Test Title
+
+Please be advised that LiteSpeed Technologies Inc. is not a web hosting company and, as such, has no control over content found on this site.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_extract_reading_text_filters_short_content(self):
+        """Test that content shorter than 100 characters is filtered out."""
+        manager = LessonManager()
+
+        content = """# Test Title
+
+This is short.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert len(text) < 100 or text == ""
+
+    def test_extract_reading_text_keeps_valid_content(self):
+        """Test that valid content with 100+ characters is kept."""
+        manager = LessonManager()
+
+        content = """# Test Title
+
+This is a valid paragraph with enough content to be considered as reading text for the lesson practice. It contains multiple sentences and should be extracted properly as it has more than one hundred characters of actual lesson content.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert len(text) >= 100
+        assert "valid paragraph" in text.lower()
+
+    def test_extract_reading_text_filters_404_error(self):
+        """Test that 404 error page content is filtered out."""
+        manager = LessonManager()
+
+        content = """# 404 Not Found
+
+The page you requested was not found. Error 404.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_extract_reading_text_filters_forbidden(self):
+        """Test that forbidden error content is filtered out."""
+        manager = LessonManager()
+
+        content = """# Access Denied
+
+403 Forbidden - You do not have permission to access this page.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_extract_reading_text_filters_server_error(self):
+        """Test that server error content is filtered out."""
+        manager = LessonManager()
+
+        content = """# Server Error
+
+500 Internal Server Error occurred.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_extract_reading_text_filters_copyright(self):
+        """Test that copyright content is filtered out."""
+        manager = LessonManager()
+
+        content = """# Test Title
+
+Copyright Breaking News English. All rights reserved. This lesson is copyrighted material.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_extract_reading_text_filters_grammar(self):
+        """Test that grammar section content is filtered out."""
+        manager = LessonManager()
+
+        content = """# Test Title
+
+Grammar exercises and activities for this lesson include gap fill, spelling, and dictation practice.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == ""
+
+    def test_fetch_level_content_filters_short_text(self):
+        """Test that level content with less than 100 chars is filtered."""
+        manager = LessonManager()
+
+        mock_lesson_info = {
+            "title": "Test Lesson",
+            "url": "https://example.com/lesson.html",
+            "level_urls": {"0": "https://example.com/lesson-0.html"},
+        }
+
+        with patch.object(manager, "_fetch_url") as mock_fetch:
+            mock_fetch.return_value = "# Title\n\nShort content."
+
+            text, paras, desc = manager._fetch_level_content(mock_lesson_info, "0")
+
+            assert text == "" or len(text) < 100
+
+    def test_fetch_level_content_keeps_valid_text(self):
+        """Test that valid level content is kept."""
+        manager = LessonManager()
+
+        mock_lesson_info = {
+            "title": "Test Lesson",
+            "url": "https://example.com/lesson.html",
+            "level_urls": {"3": "https://example.com/lesson-3.html"},
+        }
+
+        valid_content = "# Test Title\n\n" + "This is valid lesson content. " * 10
+
+        with patch.object(manager, "_fetch_url") as mock_fetch:
+            mock_fetch.return_value = valid_content
+
+            text, paras, desc = manager._fetch_level_content(mock_lesson_info, "3")
+
+            assert len(text) >= 100
+
+    def test_fetch_level_content_filters_skip_patterns(self):
+        """Test that content with skip patterns is filtered."""
+        manager = LessonManager()
+
+        mock_lesson_info = {
+            "title": "Test Lesson",
+            "url": "https://example.com/lesson.html",
+            "level_urls": {"0": "https://example.com/lesson-0.html"},
+        }
+
+        skip_content = "# Title\n\nPlease be advised that LiteSpeed Technologies Inc. is not a web hosting company."
+
+        with patch.object(manager, "_fetch_url") as mock_fetch:
+            mock_fetch.return_value = skip_content
+
+            text, paras, desc = manager._fetch_level_content(mock_lesson_info, "0")
+
+            assert text == ""
