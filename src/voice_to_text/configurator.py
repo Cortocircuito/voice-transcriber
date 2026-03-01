@@ -19,6 +19,14 @@ class ConfigManager:
         self.ui = ui
         self.history = history
 
+    def _save_config(self) -> bool:
+        """Save config to file."""
+        if self.config.save_to_file():
+            self.ui.show_success(get_text("config_saved", self.config.ui_language))
+            return True
+        self.ui.show_error("Failed to save config")
+        return False
+
     def run(self) -> None:
         """Handle configuration menu."""
         while True:
@@ -33,21 +41,29 @@ class ConfigManager:
                     if validated != self.config.duration:
                         self.config.duration = validated
                         self.ui.show_success(f"{self.config.duration}s")
+                        if self.ui.confirm_save_config():
+                            self._save_config()
             elif choice == "2":
                 lang_code = self.ui.show_language_selector()
                 if lang_code:
                     self.config.language = lang_code
                     lang_label = get_language_label(lang_code, self.config.ui_language)
                     self.ui.show_success(lang_label)
+                    if self.ui.confirm_save_config():
+                        self._save_config()
             elif choice == "3":
                 model_size = self.ui.show_model_selector()
                 if model_size:
                     self.config.model_size = model_size
                     self.ui.show_success(self.config.get_model_label())
+                    if self.ui.confirm_save_config():
+                        self._save_config()
             elif choice == "4":
                 if self.ui.confirm_clear_history(total_entries):
                     if self.history.clear_all():
-                        self.ui.show_success(get_text("history_cleared", self.config.ui_language))
+                        self.ui.show_success(
+                            get_text("history_cleared", self.config.ui_language)
+                        )
                     else:
                         self.ui.show_error("Failed to clear history")
             else:

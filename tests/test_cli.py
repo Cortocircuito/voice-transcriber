@@ -189,10 +189,10 @@ class TestCLIArguments:
         """Test main with duration argument."""
         with (
             patch("voice_to_text.cli.CLI") as mock_cli_class,
-            patch("voice_to_text.cli.Config") as mock_config_class,
+            patch("voice_to_text.cli.Config.load_from_file") as mock_load,
         ):
             mock_config = MagicMock()
-            mock_config_class.return_value = mock_config
+            mock_load.return_value = mock_config
 
             mock_cli = MagicMock()
             mock_cli_class.return_value = mock_cli
@@ -202,18 +202,17 @@ class TestCLIArguments:
 
                 main()
 
-            mock_config_class.assert_called_once_with(
-                duration=30, language="en", words_per_minute=150
-            )
+            mock_load.assert_called_once()
+            assert mock_config.duration == 30
 
     def test_main_with_reading_speed(self):
         """Test main with reading-speed argument."""
         with (
             patch("voice_to_text.cli.CLI") as mock_cli_class,
-            patch("voice_to_text.cli.Config") as mock_config_class,
+            patch("voice_to_text.cli.Config.load_from_file") as mock_load,
         ):
             mock_config = MagicMock()
-            mock_config_class.return_value = mock_config
+            mock_load.return_value = mock_config
 
             mock_cli = MagicMock()
             mock_cli_class.return_value = mock_cli
@@ -226,6 +225,5 @@ class TestCLIArguments:
 
                 main()
 
-            mock_config_class.assert_called_once_with(
-                duration=30, language="en", words_per_minute=100
-            )
+            mock_load.assert_called_once()
+            assert mock_config.words_per_minute == 100

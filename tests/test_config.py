@@ -1,8 +1,10 @@
 """Tests for voice_to_text package."""
 
+import json
 import pytest
+from pathlib import Path
 
-from voice_to_text.config import Config, SUPPORTED_LANGUAGES
+from voice_to_text.config import Config, SUPPORTED_LANGUAGES, get_config_file_path
 from voice_to_text.i18n import get_text, get_language_label
 
 
@@ -52,3 +54,67 @@ class TestI18n:
     def test_get_language_label(self):
         assert get_language_label("en", "en") == "English"
         assert get_language_label("es", "en") == "Spanish"
+
+
+class TestConfigFile:
+    def test_get_config_file_path(self):
+        path = get_config_file_path()
+        assert path.name == "config.json"
+        assert "voice-to-text" in str(path)
+
+    def test_load_from_file_defaults(self, tmp_path):
+        config = Config.load_from_file(tmp_path / "config.json")
+        assert config.duration == 15
+        assert config.language == "en"
+        assert config.words_per_minute == 150
+
+    def test_load_from_file_with_values(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        data = {
+            "duration": 30,
+            "language": "es",
+            "words_per_minute": 100,
+        }
+        with open(config_file, "w") as f:
+            json.dump(data, f)
+
+        config = Config.load_from_file(config_file)
+        assert config.duration == 30
+        assert config.language == "es"
+        assert config.words_per_minute == 100
+
+    def test_load_from_file_partial_values(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        data = {"duration": 45}
+        with open(config_file, "w") as f:
+            json.dump(data, f)
+
+        config = Config.load_from_file(config_file)
+        assert config.duration == 45
+        assert config.language == "en"
+        assert config.words_per_minute == 150
+
+    def test_load_from_file_invalid_json(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text("invalid json")
+
+        config = Config.load_from_file(config_file)
+        assert config.duration == 15
+
+    def test_save_to_file(self, tmp_path):
+        config = Config(
+            duration=30,
+            language="es",
+            words_per_minute=100,
+        )
+        config_file = tmp_path / "config.json"
+
+        result = config.save_to_file(config_file)
+        assert result is True
+        assert config_file.exists()
+
+        with open(config_file) as f:
+            data = json.load(f)
+        assert data["duration"] == 30
+        assert data["language"] == "es"
+        assert data["words_per_minute"] == 100

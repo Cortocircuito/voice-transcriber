@@ -39,6 +39,8 @@ TRANSLATIONS = {
     "history_cleared": "History cleared",
     "history_confirm_clear": "Clear all history?",
     "history_no_entries": "No history",
+    "config_saved": "Config saved",
+    "confirm_save_config": "Save as default?",
     "yes": "Yes",
     "no": "No",
     "model_tiny": "tiny   (~75MB)",

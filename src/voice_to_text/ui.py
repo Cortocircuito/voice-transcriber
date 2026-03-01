@@ -377,6 +377,22 @@ class UI:
         except (EOFError, KeyboardInterrupt):
             return False
 
+    def confirm_save_config(self) -> bool:
+        """Show confirmation dialog for saving config.
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        lang = self.config.ui_language
+
+        try:
+            response = self.console.input(
+                f"[bold {ACCENT}]{get_text('yes', lang)}/{get_text('no', lang)}:[/bold {ACCENT}] "
+            )
+            return response.strip().lower() in ["y", "yes", "s", "sí", "si"]
+        except (EOFError, KeyboardInterrupt):
+            return False
+
     def show_lessons_menu(
         self,
         lessons: list,

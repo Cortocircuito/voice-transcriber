@@ -44,6 +44,9 @@ WORDS_PER_PAGE_MAX = 150
 MIN_DURATION = 1
 MAX_DURATION = 300
 
+# Config file
+CONFIG_FILE_NAME = "config.json"
+
 # =============================================================================
 # COLOR PALETTE
 # =============================================================================
@@ -51,9 +54,9 @@ MAX_DURATION = 300
 COLOR_ACCENT = "bright_blue"
 
 # Semantic colors - have specific meaning
-COLOR_SUCCESS = "green"      # Success messages, high accuracy (>=80%)
-COLOR_WARNING = "yellow"     # Warning messages, medium accuracy (60-79%)
-COLOR_ERROR = "red"          # Error messages, low accuracy (<60%), recording
+COLOR_SUCCESS = "green"  # Success messages, high accuracy (>=80%)
+COLOR_WARNING = "yellow"  # Warning messages, medium accuracy (60-79%)
+COLOR_ERROR = "red"  # Error messages, low accuracy (<60%), recording
 
 # UI colors
-COLOR_DIM = "dim"            # Secondary text, navigation hints
+COLOR_DIM = "dim"  # Secondary text, navigation hints

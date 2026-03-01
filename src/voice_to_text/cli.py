@@ -140,20 +140,20 @@ def main():
     parser.add_argument(
         "--duration",
         type=int,
-        default=15,
-        help="Recording duration in seconds (default: 15)",
+        default=None,
+        help="Recording duration in seconds",
     )
     parser.add_argument(
         "--language",
         choices=["en", "es", "fr", "de"],
-        default="en",
-        help="Transcription language (default: en)",
+        default=None,
+        help="Transcription language",
     )
     parser.add_argument(
         "--reading-speed",
         type=int,
-        default=150,
-        help="Reading speed in words per minute (default: 150)",
+        default=None,
+        help="Reading speed in words per minute",
     )
     parser.add_argument(
         "--quick",
@@ -164,11 +164,14 @@ def main():
 
     args = parser.parse_args()
 
-    config = Config(
-        duration=args.duration,
-        language=args.language,
-        words_per_minute=args.reading_speed,
-    )
+    config = Config.load_from_file()
+
+    if args.duration is not None:
+        config.duration = args.duration
+    if args.language is not None:
+        config.language = args.language
+    if args.reading_speed is not None:
+        config.words_per_minute = args.reading_speed
 
     cli = CLI(config)
     cli.run(quick=args.quick)
