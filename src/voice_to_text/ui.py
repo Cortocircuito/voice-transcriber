@@ -20,6 +20,7 @@ from rich.text import Text
 from .config import Config
 from .constants import (
     COLOR_ACCENT,
+    COLOR_ERROR,
     COLOR_SUCCESS,
     COLOR_WARNING,
     MAX_READING_SPEED,
@@ -939,10 +940,16 @@ class UI:
             action = action.strip().lower()
 
             if action == "c" and show_copy_option and original_text:
-                pyperclip.copy(original_text)  # type: ignore[possibly-undefined]
-                self.console.print(
-                    f"[{COLOR_SUCCESS}]{get_text('copied', lang)}[/{COLOR_SUCCESS}]"
-                )
+                try:
+                    pyperclip.copy(original_text)
+                    self.console.print(
+                        f"[{COLOR_SUCCESS}]{get_text('copied', lang)}[/{COLOR_SUCCESS}]"
+                    )
+                except Exception:
+                    self.console.print(
+                        f"[{COLOR_ERROR}]Error: Clipboard not available. "
+                        f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
+                    )
 
             return action
         except (EOFError, KeyboardInterrupt):
@@ -1105,13 +1112,27 @@ class UI:
 
     def copy_stored_text(self) -> None:
         """Copy the stored original text to clipboard."""
-        import pyperclip  # type: ignore[import-untyped]
+        try:
+            import pyperclip  # type: ignore[import-untyped]
 
-        if hasattr(self, "_copy_original_text") and self._copy_original_text:
-            pyperclip.copy(self._copy_original_text)
-            self.console.print(
-                f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
-            )
+            if hasattr(self, "_copy_original_text") and self._copy_original_text:
+                pyperclip.copy(self._copy_original_text)
+                self.console.print(
+                    f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
+                )
+        except Exception as e:
+            if (
+                "clipboard" in str(e).lower()
+                or "pyperclip" in str(type(e).__module__).lower()
+            ):
+                self.console.print(
+                    f"[{COLOR_ERROR}]Error: Clipboard not available. "
+                    f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
+                )
+            else:
+                self.console.print(
+                    f"[{COLOR_ERROR}]Error: Failed to copy to clipboard.[/]"
+                )
 
     def show_lesson_complete(self) -> None:
         """Show message when all paragraphs are completed."""
