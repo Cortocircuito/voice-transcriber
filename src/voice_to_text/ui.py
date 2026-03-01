@@ -22,6 +22,11 @@ from .constants import (
     COLOR_ACCENT,
     COLOR_SUCCESS,
     COLOR_WARNING,
+    MAX_READING_SPEED,
+    MIN_READING_SPEED,
+    READING_SPEED_ADVANCED,
+    READING_SPEED_BEGINNER,
+    READING_SPEED_INTERMEDIATE,
 )
 from .i18n import get_text, get_language_label
 from .phonetics import get_words_phonetics
@@ -219,8 +224,12 @@ class UI:
             ("[1]", f"{get_text('config_duration', lang)} [{self.config.duration}s]"),
             ("[2]", f"{get_text('config_language', lang)} [{lang_label}]"),
             ("[3]", f"Model [{model_label}]"),
-            ("[4]", get_text("config_history", lang)),
-            ("[5]", get_text("menu_back", lang)),
+            (
+                "[4]",
+                f"{get_text('config_reading_speed', lang)} [{self.config.words_per_minute} WPM]",
+            ),
+            ("[5]", get_text("config_history", lang)),
+            ("[6]", get_text("menu_back", lang)),
         ]
 
         self.console.print()
@@ -232,7 +241,7 @@ class UI:
             )
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
-            return "5"
+            return "6"
 
     def show_model_selector(self) -> Optional[str]:
         """Show model selector and return selected model size."""
@@ -298,6 +307,71 @@ class UI:
             return lang_map.get(choice.strip())
         except (EOFError, KeyboardInterrupt):
             return None
+
+    def show_reading_speed_selector(self) -> Optional[int]:
+        """Show reading speed selector and return selected WPM or None."""
+        lang = self.config.ui_language
+        current = self.config.words_per_minute
+
+        items = [
+            (
+                "[1]",
+                f"{get_text('reading_speed_beginner', lang)}  {'*' if current == READING_SPEED_BEGINNER else ''}",
+            ),
+            (
+                "[2]",
+                f"{get_text('reading_speed_intermediate', lang)}  {'*' if current == READING_SPEED_INTERMEDIATE else ''}",
+            ),
+            (
+                "[3]",
+                f"{get_text('reading_speed_advanced', lang)}  {'*' if current == READING_SPEED_ADVANCED else ''}",
+            ),
+            ("[4]", get_text("reading_speed_custom", lang)),
+            ("[0]", get_text("menu_back", lang)),
+        ]
+
+        self.console.print()
+        self.console.print(self._create_panel(Align.center(self._menu_table(items))))
+
+        try:
+            choice = self.console.input(
+                f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
+            )
+            if choice.strip() == "0":
+                return None
+
+            speed_map = {
+                "1": READING_SPEED_BEGINNER,
+                "2": READING_SPEED_INTERMEDIATE,
+                "3": READING_SPEED_ADVANCED,
+            }
+
+            if choice.strip() in speed_map:
+                return speed_map[choice.strip()]
+
+            if choice.strip() == "4":
+                return self._prompt_reading_speed_custom()
+
+            return None
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def _prompt_reading_speed_custom(self) -> Optional[int]:
+        """Prompt for custom reading speed input."""
+        lang = self.config.ui_language
+        try:
+            value = self.console.input(
+                f"[bold {ACCENT}]{get_text('config_reading_speed', lang)} [{self.config.words_per_minute}]: [/bold {ACCENT}] "
+            )
+            speed = int(value.strip())
+            if MIN_READING_SPEED <= speed <= MAX_READING_SPEED:
+                return speed
+            self.show_warning(
+                f"Value must be between {MIN_READING_SPEED} and {MAX_READING_SPEED}"
+            )
+        except (ValueError, EOFError, KeyboardInterrupt):
+            pass
+        return None
 
     def prompt_duration(self) -> Optional[int]:
         """Prompt for duration input."""

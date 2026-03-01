@@ -59,6 +59,13 @@ class ConfigManager:
                     if self.ui.confirm_save_config():
                         self._save_config()
             elif choice == "4":
+                new_speed = self.ui.show_reading_speed_selector()
+                if new_speed and new_speed != self.config.words_per_minute:
+                    self.config.words_per_minute = new_speed
+                    self.ui.show_success(f"{new_speed} WPM")
+                    if self.ui.confirm_save_config():
+                        self._save_config()
+            elif choice == "5":
                 if self.ui.confirm_clear_history(total_entries):
                     if self.history.clear_all():
                         self.ui.show_success(
