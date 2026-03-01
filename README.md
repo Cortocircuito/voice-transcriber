@@ -31,6 +31,22 @@ Or install with development dependencies:
 pip install -e ".[dev]"
 ```
 
+## System Dependencies
+
+### Linux (Ubuntu/Debian)
+
+For the copy-to-clipboard feature, you need a clipboard tool:
+
+**Wayland (default on Ubuntu 24.04+):**
+```bash
+sudo apt-get install wl-clipboard
+```
+
+**X11 (fallback):**
+```bash
+sudo apt-get install xclip
+```
+
 ## Usage
 
 ### Interactive Menu
@@ -59,6 +75,7 @@ voice-to-text --duration 30 --language es
 |--------|-------------|---------|
 | `--duration` | Recording duration in seconds | 15 |
 | `--language` | Transcription language (en/es/fr/de) | en |
+| `--reading-speed` | Reading speed in WPM | 150 |
 | `--quick`, `-q` | Start recording immediately | false |
 
 ## Menu Options
@@ -86,11 +103,17 @@ Lessons are fetched from [Breaking News English](https://breakingnewsenglish.com
 
 ## Configuration
 
-Settings are stored in a dataclass and include:
+Settings can be configured via:
+- **Interactive menu**: Change settings during runtime
+- **Config file**: `~/.config/voice-to-text/config.json` (persists across sessions)
+- **CLI arguments**: Override settings per session
+
+Configurable options:
 - Recording duration (1-300 seconds)
 - Transcription language
 - UI language
 - Whisper model size
+- Reading speed (words per minute)
 - Recording device
 
 ## Development

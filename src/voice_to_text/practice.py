@@ -188,6 +188,7 @@ class PracticeManager:
         total_pages = len(pages)
         current_page = 0
         page_durations: dict[int, int] = {}
+        page_text = ""
 
         while current_page < total_pages:
             page_text, page_words, start_para, end_para = pages[current_page]
@@ -252,12 +253,12 @@ class PracticeManager:
         self.ui.show_lesson_complete()
 
         while True:
-            action = self.ui.show_practice_actions()
+            action = self.ui.show_practice_actions(original_text=page_text)
             if action == "n":
                 return "new_lesson"
             elif action == "s":
                 return "exit"
-            elif action == "r":
+            elif action == "r" or action == "c":
                 current_page = 0
                 break
 
@@ -323,9 +324,9 @@ class PracticeManager:
 
         while True:
             if end_paragraph < total_paragraphs:
-                self.ui.show_paragraph_actions()
+                self.ui.show_paragraph_actions(original_text=text)
             else:
-                self.ui.show_last_paragraph_actions()
+                self.ui.show_last_paragraph_actions(original_text=text)
 
             try:
                 action = self.ui.console.input(
@@ -343,6 +344,9 @@ class PracticeManager:
                 return "next"
             elif action == "s":
                 return "exit"
+            elif action == "c":
+                self.ui.copy_stored_text()
+                continue
 
         return "exit"
 

@@ -101,6 +101,8 @@ TRANSLATIONS = {
     "phonetics": "Phonetics (IPA)",
     "mispronounced_words": "Mispronounced Words",
     "missing_words": "Missing Words (skipped)",
+    "copy_original": "Copy original",
+    "copied": "Copied!",
 }
 
 

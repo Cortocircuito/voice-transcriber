@@ -22,7 +22,6 @@ wheels/
 
 # Virtual environments
 venv/
-whisper_venv/
 ENV/
 env/
 .venv/

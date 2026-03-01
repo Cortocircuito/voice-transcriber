@@ -905,23 +905,46 @@ class UI:
             )
         )
 
-    def show_practice_actions(self) -> str:
+    def show_practice_actions(self, original_text: Optional[str] = None) -> str:
         """Show practice session action prompts.
 
+        Args:
+            original_text: Optional original text to copy
+
         Returns:
-            User's choice: 'r' for retry, 'n' for new lesson, 's' for stop
+            User's choice: 'r' for retry, 'n' for new lesson, 's' for stop, 'c' for copy
         """
+        import pyperclip  # type: ignore[import-untyped]
+
         lang = self.config.ui_language
-        self.console.print(
-            f"\n[dim][R] {get_text('try_again', lang)} | "
-            f"[N] {get_text('new_lesson', lang)} | "
-            f"[S] {get_text('action_exit', lang)}[/dim]"
-        )
+        show_copy_option = bool(original_text)
+
+        if show_copy_option:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[C] {get_text('copy_original', lang)} | "
+                f"[N] {get_text('new_lesson', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
+        else:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[N] {get_text('new_lesson', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
         try:
             action = self.console.input(
                 f"[bold {ACCENT}]{get_text('continue_prompt', lang)}:[/bold {ACCENT}] "
             )
-            return action.strip().lower()
+            action = action.strip().lower()
+
+            if action == "c" and show_copy_option and original_text:
+                pyperclip.copy(original_text)  # type: ignore[possibly-undefined]
+                self.console.print(
+                    f"[{COLOR_SUCCESS}]{get_text('copied', lang)}[/{COLOR_SUCCESS}]"
+                )
+
+            return action
         except (EOFError, KeyboardInterrupt):
             return "s"
 
@@ -1032,23 +1055,63 @@ class UI:
         except (EOFError, KeyboardInterrupt):
             return "back"
 
-    def show_paragraph_actions(self) -> None:
+    def show_paragraph_actions(self, original_text: Optional[str] = None) -> None:
         """Show actions after recording a paragraph (not the last one)."""
         lang = self.config.ui_language
-        self.console.print(
-            f"\n[dim][R] {get_text('try_again', lang)} | "
-            f"[N] {get_text('next_paragraph', lang)} | "
-            f"[S] {get_text('action_exit', lang)}[/dim]"
-        )
+        show_copy = bool(original_text)
 
-    def show_last_paragraph_actions(self) -> None:
+        if show_copy:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[C] {get_text('copy_original', lang)} | "
+                f"[N] {get_text('next_paragraph', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
+        else:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[N] {get_text('next_paragraph', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
+
+        if show_copy and original_text:
+            self._copy_original_text = original_text
+        else:
+            self._copy_original_text = None
+
+    def show_last_paragraph_actions(self, original_text: Optional[str] = None) -> None:
         """Show actions after recording the last paragraph."""
         lang = self.config.ui_language
-        self.console.print(
-            f"\n[dim][R] {get_text('try_again', lang)} | "
-            f"[N] {get_text('new_lesson', lang)} | "
-            f"[S] {get_text('action_exit', lang)}[/dim]"
-        )
+        show_copy = bool(original_text)
+
+        if show_copy:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[C] {get_text('copy_original', lang)} | "
+                f"[N] {get_text('new_lesson', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
+        else:
+            self.console.print(
+                f"\n[dim][R] {get_text('try_again', lang)} | "
+                f"[N] {get_text('new_lesson', lang)} | "
+                f"[S] {get_text('action_exit', lang)}[/dim]"
+            )
+
+        if show_copy and original_text:
+            self._copy_original_text = original_text
+        else:
+            self._copy_original_text = None
+
+    def copy_stored_text(self) -> None:
+        """Copy the stored original text to clipboard."""
+        import pyperclip  # type: ignore[import-untyped]
+
+        if hasattr(self, "_copy_original_text") and self._copy_original_text:
+            pyperclip.copy(self._copy_original_text)
+            self.console.print(
+                f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
+            )
 
     def show_lesson_complete(self) -> None:
         """Show message when all paragraphs are completed."""
