@@ -30,6 +30,7 @@ DEFAULT_DURATION = 15
 DEFAULT_LANGUAGE = "en"
 DEFAULT_UI_LANGUAGE = "en"
 DEFAULT_MODEL_SIZE = "base"
+DEFAULT_READING_SPEED = 150
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MIN_DURATION = CONSTANTS_MIN_DURATION
@@ -49,6 +50,7 @@ class Config:
     ui_language: str = DEFAULT_UI_LANGUAGE
     recording_device: Optional[str] = DEFAULT_DEVICE
     model_size: str = DEFAULT_MODEL_SIZE
+    words_per_minute: int = DEFAULT_READING_SPEED
 
     def validate_duration(self, value: str) -> int:
         try:

@@ -202,4 +202,30 @@ class TestCLIArguments:
 
                 main()
 
-            mock_config_class.assert_called_once_with(duration=30, language="en")
+            mock_config_class.assert_called_once_with(
+                duration=30, language="en", words_per_minute=150
+            )
+
+    def test_main_with_reading_speed(self):
+        """Test main with reading-speed argument."""
+        with (
+            patch("voice_to_text.cli.CLI") as mock_cli_class,
+            patch("voice_to_text.cli.Config") as mock_config_class,
+        ):
+            mock_config = MagicMock()
+            mock_config_class.return_value = mock_config
+
+            mock_cli = MagicMock()
+            mock_cli_class.return_value = mock_cli
+
+            with patch(
+                "sys.argv",
+                ["voice-to-text", "--duration", "30", "--reading-speed", "100"],
+            ):
+                from voice_to_text.cli import main
+
+                main()
+
+            mock_config_class.assert_called_once_with(
+                duration=30, language="en", words_per_minute=100
+            )

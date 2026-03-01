@@ -5,7 +5,7 @@ import math
 import re
 
 from .comparison import TextComparator
-from .config import Config, WORDS_PER_MINUTE
+from .config import Config
 from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_text
@@ -173,7 +173,7 @@ class PracticeManager:
 
     def _calculate_reading_time(self, word_count: int) -> int:
         """Calculate estimated reading time in seconds."""
-        minutes = word_count / WORDS_PER_MINUTE
+        minutes = word_count / self.config.words_per_minute
         seconds = math.ceil(minutes * 60)
         return max(10, seconds)
 

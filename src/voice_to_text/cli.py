@@ -150,6 +150,12 @@ def main():
         help="Transcription language (default: en)",
     )
     parser.add_argument(
+        "--reading-speed",
+        type=int,
+        default=150,
+        help="Reading speed in words per minute (default: 150)",
+    )
+    parser.add_argument(
         "--quick",
         "-q",
         action="store_true",
@@ -161,6 +167,7 @@ def main():
     config = Config(
         duration=args.duration,
         language=args.language,
+        words_per_minute=args.reading_speed,
     )
 
     cli = CLI(config)
