@@ -111,7 +111,104 @@ class ComparisonResult:
 
 class TextComparator:
     """Compares original text with transcription."""
-    
+
+    # Grupos fonéticos: letras que suenan similar en inglés
+    PHONETIC_GROUPS = {
+        'b': 'B', 'f': 'F', 'p': 'P', 'v': 'V',
+        'c': 'K', 'g': 'K', 'k': 'K', 'q': 'K', 'x': 'K',
+        's': 'S', 'z': 'S',
+        'd': 'D', 't': 'D',
+        'm': 'M', 'n': 'N',
+        'r': 'R', 'l': 'R',  # r y l son similares fonéticamente
+        'j': 'J',
+        'w': 'W', 'h': 'W',  # w y h son mudas o semivocales
+    }
+    VOWELS = set('aeiouy')
+
+    @staticmethod
+    def get_phonetic_code(word: str) -> str:
+        """Genera código fonético simplificado para una palabra.
+
+        Implementa un algoritmo similar a Soundex pero simplificado.
+        Las letras que suenan similar reciben el mismo código.
+
+        Args:
+            word: Palabra a convertir
+
+        Returns:
+            Código fonético (letras mayúsculas representando sonidos)
+        """
+        if not word:
+            return ""
+
+        word = word.lower()
+        if len(word) == 1:
+            return word.upper()
+
+        code = ""
+        prev_phoneme = ""
+
+        for i, char in enumerate(word):
+            if char in TextComparator.VOWELS:
+                # Las vocales son importantes - las preservamos parcialmente
+                # pero no连续 dos vocales
+                if not code.endswith('V'):
+                    code += 'V'
+                prev_phoneme = "V"
+                continue
+
+            if char in TextComparator.PHONETIC_GROUPS:
+                phoneme = TextComparator.PHONETIC_GROUPS[char]
+                # Solo añadir si es diferente del fonema anterior
+                if phoneme != prev_phoneme:
+                    code += phoneme
+                    prev_phoneme = phoneme
+            else:
+                prev_phoneme = ""
+
+        # Eliminar duplicados consecutivos
+        result = ""
+        prev = ""
+        for c in code:
+            if c != prev:
+                result += c
+            prev = c
+
+        return result if result else word.upper()[:2]
+
+    @staticmethod
+    def is_phonetic_match(word1: str, word2: str, exact_match_required: bool = False) -> bool:
+        """Compara dos palabras fonéticamente.
+
+        Args:
+            word1: Primera palabra
+            word2: Segunda palabra
+            exact_match_required: Si True, requiere coincidencia exacta además de fonética
+
+        Returns:
+            True si las palabras coinciden exacta o fonéticamente
+        """
+        if not word1 or not word2:
+            return False
+
+        # Coincidencia exacta (ignorando mayúsculas/minúsculas)
+        if word1.lower() == word2.lower():
+            return True
+
+        if exact_match_required:
+            return False
+
+        # Comparación fonética más flexible
+        code1 = TextComparator.get_phonetic_code(word1)
+        code2 = TextComparator.get_phonetic_code(word2)
+
+        if not code1 or not code2:
+            return False
+
+        # Verificar si los códigos fonéticos son similares
+        # Usamos difflib para mayor flexibilidad
+        return difflib.SequenceMatcher(None, code1, code2).ratio() > 0.6
+
     @staticmethod
     def normalize_word(word: str) -> str:
         """Normalize a single word.
@@ -276,10 +373,10 @@ class TextComparator:
         
         total_count = len(original_normalized)
         accuracy = correct_count / total_count if total_count > 0 else 0.0
-        
+
         missing_words = [orig for idx, orig, trans in errors if trans == "(missing)"]
         extra_words = []
-        
+
         return ComparisonResult(
             original_words=original_words_raw,
             transcribed_words=transcribed_words_raw,
@@ -294,7 +391,256 @@ class TextComparator:
             missing_words=missing_words,
             extra_words=extra_words,
         )
-    
+
+    def compare_flexible(
+        self,
+        original: str,
+        transcribed: str,
+        window_size: int = 2,
+        use_phonetic: bool = True,
+    ) -> ComparisonResult:
+        """Compara texto con búsqueda flexible en ventana.
+
+        Para cada palabra del texto original, busca en un rango de posiciones
+        en la transcripción en lugar de requerir alineación estricta.
+
+        Args:
+            original: Texto original a comparar
+            transcribed: Texto transcrito
+            window_size: Tamaño de la ventana de búsqueda (±palabras)
+            use_phonetic: Usar coincidencia fonética además de exacta
+
+        Returns:
+            ComparisonResult con análisis detallado
+        """
+        original_words_raw = self.get_original_words(original)
+        transcribed_words_raw = self.get_original_words(transcribed)
+
+        original_normalized = self.normalize_text(original)
+        transcribed_normalized = self.normalize_text(transcribed)
+
+        matches: list[WordMatch] = []
+        errors: list[tuple[int, str, str]] = []
+        error_details: list[dict] = []
+        orig_error_indices: set[int] = set()
+        trans_error_indices: set[int] = set()
+        correct_count = 0
+
+        # Tracks which transcribed positions have been matched
+        matched_trans_positions: set[int] = set()
+
+        for orig_idx, orig_word in enumerate(original_normalized):
+            # Primero buscar coincidencia exacta en la ventana
+            found_pos = -1
+            found_type = None  # 'exact' or 'phonetic'
+
+            search_start = max(0, orig_idx - window_size)
+
+            # 1. Buscar coincidencia exacta en la ventana
+            for trans_idx in range(search_start, len(transcribed_normalized)):
+                if trans_idx in matched_trans_positions:
+                    continue
+
+                if orig_word.lower() == transcribed_normalized[trans_idx].lower():
+                    found_pos = trans_idx
+                    found_type = 'exact'
+                    matched_trans_positions.add(trans_idx)
+                    break
+
+            # 2. Si no hay coincidencia exacta, buscar fonética en todo el texto
+            if found_pos < 0 and use_phonetic:
+                for trans_idx in range(len(transcribed_normalized)):
+                    if trans_idx in matched_trans_positions:
+                        continue
+
+                    if self.is_phonetic_match(orig_word, transcribed_normalized[trans_idx]):
+                        found_pos = trans_idx
+                        found_type = 'phonetic'
+                        matched_trans_positions.add(trans_idx)
+                        break
+
+            orig_word_raw = original_words_raw[orig_idx] if orig_idx < len(original_words_raw) else orig_word
+
+            if found_pos >= 0:
+                trans_word_raw = (
+                    transcribed_words_raw[found_pos]
+                    if found_pos < len(transcribed_words_raw)
+                    else transcribed_normalized[found_pos]
+                )
+                matches.append(WordMatch(
+                    original=orig_word_raw,
+                    transcribed=trans_word_raw,
+                    is_match=True,
+                    index=orig_idx,
+                ))
+                correct_count += 1
+            else:
+                matches.append(WordMatch(
+                    original=orig_word_raw,
+                    transcribed="",
+                    is_match=False,
+                    index=orig_idx,
+                ))
+                orig_error_indices.add(orig_idx)
+                errors.append((orig_idx, orig_word_raw, "(missing)"))
+                error_details.append({
+                    "orig_idx": orig_idx,
+                    "trans_idx": None,
+                    "expected": orig_word_raw,
+                    "got": "(missing)",
+                    "method": "flexible_window",
+                })
+
+        # Identificar palabras extra (en transcripción pero no matched)
+        extra_words = []
+        for trans_idx, trans_word in enumerate(transcribed_normalized):
+            if trans_idx not in matched_trans_positions:
+                trans_word_raw = (
+                    transcribed_words_raw[trans_idx]
+                    if trans_idx < len(transcribed_words_raw)
+                    else trans_word
+                )
+                extra_words.append(trans_word_raw)
+                trans_error_indices.add(trans_idx)
+
+        total_count = len(original_normalized)
+        accuracy = correct_count / total_count if total_count > 0 else 0.0
+
+        return ComparisonResult(
+            original_words=original_words_raw,
+            transcribed_words=transcribed_words_raw,
+            matches=matches,
+            errors=errors,
+            error_details=error_details,
+            trans_error_indices=trans_error_indices,
+            orig_error_indices=orig_error_indices,
+            accuracy=accuracy,
+            correct_count=correct_count,
+            total_count=total_count,
+            missing_words=[e[1] for e in errors if e[2] == "(missing)"],
+            extra_words=extra_words,
+        )
+
+    def compare_per_word(
+        self,
+        original: str,
+        transcribed: str,
+        use_phonetic: bool = True,
+    ) -> ComparisonResult:
+        """Compara palabra por palabra sin alineación secuencial.
+
+        Para cada palabra del texto original, verifica si existe en
+        cualquier posición de la transcripción. No requiere orden.
+
+        Args:
+            original: Texto original a comparar
+            transcribed: Texto transcrito
+            use_phonetic: Usar coincidencia fonética además de exacta
+
+        Returns:
+            ComparisonResult con análisis detallado
+        """
+        original_words_raw = self.get_original_words(original)
+        transcribed_words_raw = self.get_original_words(transcribed)
+
+        original_normalized = self.normalize_text(original)
+        transcribed_normalized = self.normalize_text(transcribed)
+
+        matches: list[WordMatch] = []
+        errors: list[tuple[int, str, str]] = []
+        error_details: list[dict] = []
+        orig_error_indices: set[int] = set()
+        trans_error_indices: set[int] = set()
+        correct_count = 0
+
+        # Tracks which transcribed positions have been used
+        used_trans_positions: set[int] = set()
+
+        # Para cada palabra original, buscar en cualquier posición
+        for orig_idx, orig_word in enumerate(original_normalized):
+            orig_word_raw = (
+                original_words_raw[orig_idx]
+                if orig_idx < len(original_words_raw)
+                else orig_word
+            )
+
+            # Buscar en cualquier posición no usada
+            found_pos = -1
+            for trans_idx, trans_word in enumerate(transcribed_normalized):
+                if trans_idx in used_trans_positions:
+                    continue
+
+                # Verificar coincidencia exacta o fonética
+                is_match = (
+                    orig_word.lower() == trans_word.lower() or
+                    (use_phonetic and self.is_phonetic_match(orig_word, trans_word))
+                )
+
+                if is_match:
+                    found_pos = trans_idx
+                    used_trans_positions.add(trans_idx)
+                    break
+
+            if found_pos >= 0:
+                trans_word_raw = (
+                    transcribed_words_raw[found_pos]
+                    if found_pos < len(transcribed_words_raw)
+                    else transcribed_normalized[found_pos]
+                )
+                matches.append(WordMatch(
+                    original=orig_word_raw,
+                    transcribed=trans_word_raw,
+                    is_match=True,
+                    index=orig_idx,
+                ))
+                correct_count += 1
+            else:
+                matches.append(WordMatch(
+                    original=orig_word_raw,
+                    transcribed="",
+                    is_match=False,
+                    index=orig_idx,
+                ))
+                orig_error_indices.add(orig_idx)
+                errors.append((orig_idx, orig_word_raw, "(missing)"))
+                error_details.append({
+                    "orig_idx": orig_idx,
+                    "trans_idx": None,
+                    "expected": orig_word_raw,
+                    "got": "(missing)",
+                    "method": "per_word",
+                })
+
+        # Palabras extra (en transcripción pero no usadas)
+        extra_words = []
+        for trans_idx, trans_word in enumerate(transcribed_normalized):
+            if trans_idx not in used_trans_positions:
+                trans_word_raw = (
+                    transcribed_words_raw[trans_idx]
+                    if trans_idx < len(transcribed_words_raw)
+                    else trans_word
+                )
+                extra_words.append(trans_word_raw)
+                trans_error_indices.add(trans_idx)
+
+        total_count = len(original_normalized)
+        accuracy = correct_count / total_count if total_count > 0 else 0.0
+
+        return ComparisonResult(
+            original_words=original_words_raw,
+            transcribed_words=transcribed_words_raw,
+            matches=matches,
+            errors=errors,
+            error_details=error_details,
+            trans_error_indices=trans_error_indices,
+            orig_error_indices=orig_error_indices,
+            accuracy=accuracy,
+            correct_count=correct_count,
+            total_count=total_count,
+            missing_words=[e[1] for e in errors if e[2] == "(missing)"],
+            extra_words=extra_words,
+        )
+
     def generate_display(self, result: ComparisonResult, ui_language: str = "en") -> str:
         """Generate a formatted display of the comparison.
         
