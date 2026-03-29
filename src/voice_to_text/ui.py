@@ -1,7 +1,8 @@
 """UI components for voice-to-text using Rich library."""
 
+import signal
 import time
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from rich.align import Align
 from rich.box import ROUNDED
@@ -41,6 +42,29 @@ class UI:
     def __init__(self, config: Config):
         self.config = config
         self.console = Console(color_system="auto", force_terminal=True)
+        self._redraw_fn: Optional[Callable[[], None]] = None
+        self._setup_resize_handler()
+
+    def _setup_resize_handler(self) -> None:
+        """Register a SIGWINCH handler to redraw the active panel on resize.
+
+        Only installed on Unix systems that expose SIGWINCH.  Chains to any
+        previously registered handler so readline and other libraries are not
+        disrupted.
+        """
+        if not hasattr(signal, "SIGWINCH"):
+            return  # Windows has no SIGWINCH
+
+        _old_handler = signal.getsignal(signal.SIGWINCH)
+
+        def _on_resize(signum: int, frame: Any) -> None:
+            if self._redraw_fn is not None:
+                self.console.clear()
+                self._redraw_fn()
+            if callable(_old_handler):
+                _old_handler(signum, frame)
+
+        signal.signal(signal.SIGWINCH, _on_resize)
 
     def _create_panel(
         self,
@@ -88,14 +112,17 @@ class UI:
         model_text = self.config.model_size
         subtitle = f"[dim]{duration_text} | {lang_text} | {model_text}[/dim]"
 
-        self.console.print()
-        self.console.print(
-            self._create_panel(
-                Align.center(self._menu_table(items)),
-                subtitle=subtitle,
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(
+                    Align.center(self._menu_table(items)),
+                    subtitle=subtitle,
+                )
             )
-        )
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"\n[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -103,6 +130,8 @@ class UI:
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
             return "4"
+        finally:
+            self._redraw_fn = None
 
     def show_recording_start(self):
         """Show recording start message."""
@@ -233,9 +262,14 @@ class UI:
             ("[6]", get_text("menu_back", lang)),
         ]
 
-        self.console.print()
-        self.console.print(self._create_panel(Align.center(self._menu_table(items))))
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(Align.center(self._menu_table(items)))
+            )
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"\n[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -243,6 +277,8 @@ class UI:
             return choice.strip()
         except (EOFError, KeyboardInterrupt):
             return "6"
+        finally:
+            self._redraw_fn = None
 
     def show_model_selector(self) -> Optional[str]:
         """Show model selector and return selected model size."""
@@ -269,9 +305,14 @@ class UI:
             ("[0]", get_text("menu_back", lang)),
         ]
 
-        self.console.print()
-        self.console.print(self._create_panel(Align.center(self._menu_table(items))))
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(Align.center(self._menu_table(items)))
+            )
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -282,6 +323,8 @@ class UI:
             return model_map.get(choice.strip())
         except (EOFError, KeyboardInterrupt):
             return None
+        finally:
+            self._redraw_fn = None
 
     def show_language_selector(self) -> Optional[str]:
         """Show language selector and return selected language code."""
@@ -295,9 +338,14 @@ class UI:
             ("[0]", get_text("menu_back", lang)),
         ]
 
-        self.console.print()
-        self.console.print(self._create_panel(Align.center(self._menu_table(items))))
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(Align.center(self._menu_table(items)))
+            )
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -308,6 +356,8 @@ class UI:
             return lang_map.get(choice.strip())
         except (EOFError, KeyboardInterrupt):
             return None
+        finally:
+            self._redraw_fn = None
 
     def show_reading_speed_selector(self) -> Optional[int]:
         """Show reading speed selector and return selected WPM or None."""
@@ -331,9 +381,14 @@ class UI:
             ("[0]", get_text("menu_back", lang)),
         ]
 
-        self.console.print()
-        self.console.print(self._create_panel(Align.center(self._menu_table(items))))
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(Align.center(self._menu_table(items)))
+            )
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -356,6 +411,8 @@ class UI:
             return None
         except (EOFError, KeyboardInterrupt):
             return None
+        finally:
+            self._redraw_fn = None
 
     def _prompt_reading_speed_custom(self) -> Optional[int]:
         """Prompt for custom reading speed input."""
@@ -497,15 +554,19 @@ class UI:
                 f"\n  [bold yellow]{get_text('lessons_no_cached', lang)}[/bold yellow]\n\n"
                 f"  [dim][R] Refresh | [0] {get_text('menu_back', lang)}[/dim]\n"
             )
-            self.console.print()
-            self.console.print(
-                self._create_panel(
-                    content,
-                    border_style="yellow",
-                    title=get_text("lessons_title", lang),
-                )
-            )
 
+            def render_empty() -> None:
+                self.console.print()
+                self.console.print(
+                    self._create_panel(
+                        content,
+                        border_style="yellow",
+                        title=get_text("lessons_title", lang),
+                    )
+                )
+
+            render_empty()
+            self._redraw_fn = render_empty
             try:
                 choice = self.console.input(
                     f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -515,6 +576,8 @@ class UI:
                 return None
             except (EOFError, KeyboardInterrupt):
                 return None
+            finally:
+                self._redraw_fn = None
 
         total_pages = (len(lessons) + per_page - 1) // per_page
         start_idx = page * per_page
@@ -525,9 +588,6 @@ class UI:
         grid.add_column(style=f"bold {ACCENT}", no_wrap=True)
         grid.add_column()
         grid.add_column(style="dim")
-
-        if is_offline:
-            self.console.print(f"\n[dim]{get_text('lessons_offline', lang)}[/dim]")
 
         for i, lesson in enumerate(page_lessons):
             global_idx = start_idx + i
@@ -553,13 +613,18 @@ class UI:
         subtitle = f"[dim]{get_text('page', lang)} {page + 1} {get_text('of', lang)} {total_pages}[/dim]"
         content = Group(grid, Text(""), nav_grid)
 
-        self.console.print()
-        self.console.print(
-            self._create_panel(
-                content, subtitle=subtitle, title=get_text("lessons_title", lang)
+        def render_lessons() -> None:
+            if is_offline:
+                self.console.print(f"\n[dim]{get_text('lessons_offline', lang)}[/dim]")
+            self.console.print()
+            self.console.print(
+                self._create_panel(
+                    content, subtitle=subtitle, title=get_text("lessons_title", lang)
+                )
             )
-        )
 
+        render_lessons()
+        self._redraw_fn = render_lessons
         try:
             choice = self.console.input(
                 f"\n[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -585,6 +650,8 @@ class UI:
             return None
         except (EOFError, KeyboardInterrupt):
             return None
+        finally:
+            self._redraw_fn = None
 
     def show_level_selector(self, lesson) -> Optional[str]:
         """Show level selector for a lesson.
@@ -620,15 +687,19 @@ class UI:
         grid.add_row("[0]", get_text("menu_back", lang))
 
         subtitle = f"[dim]{lesson.title[:60]}[/dim]"
-        self.console.print()
-        self.console.print(
-            self._create_panel(
-                Align.center(grid),
-                subtitle=subtitle,
-                title=get_text("level_selector", lang),
-            )
-        )
 
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(
+                    Align.center(grid),
+                    subtitle=subtitle,
+                    title=get_text("level_selector", lang),
+                )
+            )
+
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -644,6 +715,8 @@ class UI:
             return None
         except (EOFError, KeyboardInterrupt):
             return None
+        finally:
+            self._redraw_fn = None
 
     def show_lesson_text(self, text: str, level: str) -> None:
         """Show lesson text for reading practice.
@@ -716,14 +789,6 @@ class UI:
             + "\n"
         )
 
-        self.console.print()
-        self.console.print(
-            self._create_panel(
-                content,
-                title=f"{get_text('reading_mode', lang)} — {get_text('level', lang)} {level}",
-            )
-        )
-
         nav_parts = []
         if total_pages > 1 and page_num < total_pages:
             nav_parts.append(f"[N] {get_text('next_page', lang)}")
@@ -733,8 +798,18 @@ class UI:
             nav_parts.append(f"[P] {get_text('prev_page', lang)}")
         nav_parts.append(f"[B] {get_text('menu_back', lang)}")
 
-        self.console.print(f"\n[dim]{' | '.join(nav_parts)}[/dim]")
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(
+                    content,
+                    title=f"{get_text('reading_mode', lang)} — {get_text('level', lang)} {level}",
+                )
+            )
+            self.console.print(f"\n[dim]{' | '.join(nav_parts)}[/dim]")
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"\n[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -755,6 +830,8 @@ class UI:
                 return "record"
         except (EOFError, KeyboardInterrupt):
             return "back"
+        finally:
+            self._redraw_fn = None
 
     def prompt_duration_change(
         self, current_duration: int, calculated_duration: int
@@ -775,11 +852,14 @@ class UI:
             f"  {get_text('estimated_time', lang)}: {calculated_duration}s\n"
         )
 
-        self.console.print()
-        self.console.print(
-            self._create_panel(content, title=get_text("change_duration", lang))
-        )
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(content, title=get_text("change_duration", lang))
+            )
 
+        render()
+        self._redraw_fn = render
         try:
             value = self.console.input(
                 f"[bold {ACCENT}]{get_text('set_duration', lang)} [{current_duration}]: [/bold {ACCENT}] "
@@ -792,6 +872,8 @@ class UI:
             return current_duration
         except (ValueError, EOFError, KeyboardInterrupt):
             return current_duration
+        finally:
+            self._redraw_fn = None
 
     def show_comparison(self, original: str, transcribed: str, result) -> None:
         """Show comparison results with error highlighting.
@@ -1019,14 +1101,6 @@ class UI:
             + "\n"
         )
 
-        self.console.print()
-        self.console.print(
-            self._create_panel(
-                content,
-                title=f"{get_text('reading_mode', lang)} — {get_text('level', lang)} {level}",
-            )
-        )
-
         nav_parts = []
         if end_paragraph < total_paragraphs:
             nav_parts.append(f"[N] {get_text('next_paragraph', lang)}")
@@ -1037,8 +1111,18 @@ class UI:
         nav_parts.append(f"[M] {get_text('main_menu', lang)}")
         nav_parts.append(f"[B] {get_text('menu_back', lang)}")
 
-        self.console.print(f"\n[dim]{' | '.join(nav_parts)}[/dim]")
+        def render() -> None:
+            self.console.print()
+            self.console.print(
+                self._create_panel(
+                    content,
+                    title=f"{get_text('reading_mode', lang)} — {get_text('level', lang)} {level}",
+                )
+            )
+            self.console.print(f"\n[dim]{' | '.join(nav_parts)}[/dim]")
 
+        render()
+        self._redraw_fn = render
         try:
             choice = self.console.input(
                 f"\n[bold {ACCENT}]{get_text('option', lang)}:[/bold {ACCENT}] "
@@ -1061,6 +1145,8 @@ class UI:
                 return "record"
         except (EOFError, KeyboardInterrupt):
             return "back"
+        finally:
+            self._redraw_fn = None
 
     def show_paragraph_actions(self, original_text: Optional[str] = None) -> None:
         """Show actions after recording a paragraph (not the last one)."""
