@@ -258,7 +258,9 @@ class PracticeManager:
                 return "new_lesson"
             elif action == "s":
                 return "exit"
-            elif action == "r" or action == "c":
+            elif action == "c":
+                continue
+            elif action == "r":
                 current_page = 0
                 break
 

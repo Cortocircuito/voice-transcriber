@@ -915,8 +915,6 @@ class UI:
         Returns:
             User's choice: 'r' for retry, 'n' for new lesson, 's' for stop, 'c' for copy
         """
-        import pyperclip  # type: ignore[import-untyped]
-
         lang = self.config.ui_language
         show_copy_option = bool(original_text)
 
@@ -941,6 +939,8 @@ class UI:
 
             if action == "c" and show_copy_option and original_text:
                 try:
+                    import pyperclip  # type: ignore[import-untyped]
+
                     pyperclip.copy(original_text)
                     self.console.print(
                         f"[{COLOR_SUCCESS}]{get_text('copied', lang)}[/{COLOR_SUCCESS}]"
@@ -1121,18 +1121,10 @@ class UI:
                     f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
                 )
         except Exception as e:
-            if (
-                "clipboard" in str(e).lower()
-                or "pyperclip" in str(type(e).__module__).lower()
-            ):
-                self.console.print(
-                    f"[{COLOR_ERROR}]Error: Clipboard not available. "
-                    f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
-                )
-            else:
-                self.console.print(
-                    f"[{COLOR_ERROR}]Error: Failed to copy to clipboard.[/]"
-                )
+            self.console.print(
+                f"[{COLOR_ERROR}]Error: Clipboard not available. "
+                f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
+            )
 
     def show_lesson_complete(self) -> None:
         """Show message when all paragraphs are completed."""
