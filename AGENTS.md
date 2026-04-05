@@ -48,16 +48,99 @@ pre-commit run --all-files
 
 ### Running the Application
 
+#### Installation Methods
+
+There are three main installation methods. Choose based on your use case:
+
+**Option 3 (Recommended for users):** User Install
 ```bash
-# Install the package
+# Install for current user only (avoids externally-managed environment restrictions)
+pip install -e . --user
+
+# Update to new version
+pip install -e . --user --force-reinstall
+
+# Uninstall
+pip uninstall voice-to-text
+
+# Run
+voice-to-text
+```
+
+**Option 2 (Recommended for system isolation):** pipx
+```bash
+# Install with pipx (creates isolated environment)
+pipx install -e /path/to/voz_a_texto
+
+# Update to new version
+pipx reinstall voice-to-text
+
+# Uninstall
+pipx uninstall voice-to-text
+
+# Run
+voice-to-text
+```
+
+**Option 1 (Best for development):** Virtual Environment
+```bash
+# Create and activate venv
+python -m venv venv
+source venv/bin/activate
+
+# Install
 pip install -e .
 
-# Run the CLI
+# Update to new version
+pip install -e . --force-reinstall
+
+# Uninstall
+deactivate && rm -rf venv
+
+# Run (requires activation)
+voice-to-text
+```
+
+#### Development Setup
+
+For development, use Option 1 with dev dependencies:
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+```
+
+Then run the CLI:
+```bash
 voice-to-text
 
-# Or run directly
+# Or run directly without installation
 python -m voice_to_text
 ```
+
+#### Clipboard Troubleshooting (pyperclip)
+
+The application uses `pyperclip` for the copy-to-clipboard feature (`[C]` menu option). This relies on system clipboard tools:
+
+**Required system dependencies:**
+- **Wayland** (Ubuntu 24.04+): `wl-clipboard` (provides `wl-copy`, `wl-paste`)
+- **X11**: `xclip` or `xsel`
+
+**Common issues:**
+
+1. **"Clipboard not available" error**: Clipboard tool not installed
+   - Install appropriate tool: `sudo apt-get install wl-clipboard` (Wayland) or `sudo apt-get install xclip` (X11)
+
+2. **Works in venv but not with installed command**: Environment variable difference
+   - Ensure venv is activated: `source venv/bin/activate`
+   - For user install, ensure `~/.local/bin` is in PATH
+
+3. **pyperclip can't find clipboard tool**: PATH or environment issue
+   - Check tool is installed: `which wl-copy` or `which xclip`
+   - Verify display server: `echo $XDG_SESSION_TYPE`
+   - Option 2 (pipx) typically handles this best due to proper environment isolation
 
 ## Code Style Guidelines
 
