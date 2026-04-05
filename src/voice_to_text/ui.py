@@ -59,6 +59,8 @@ class UI:
 
         def _on_resize(signum: int, frame: Any) -> None:
             if self._redraw_fn is not None:
+                # NOTE: console.width already calls os.get_terminal_size() dynamically
+                # on every access, so the redrawed panel will use the new width.
                 self.console.clear()
                 self._redraw_fn()
             if callable(_old_handler):
@@ -1206,7 +1208,7 @@ class UI:
                 self.console.print(
                     f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
                 )
-        except Exception as e:
+        except Exception:
             self.console.print(
                 f"[{COLOR_ERROR}]Error: Clipboard not available. "
                 f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"

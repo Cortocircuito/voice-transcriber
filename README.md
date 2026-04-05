@@ -21,21 +21,109 @@ A Python CLI application for speech transcription using faster-whisper. Provides
 
 ## Installation
 
+### Recommended: User Install (Option 3)
+
+This is the recommended method for end users. It avoids Python's externally-managed environment restrictions on Ubuntu 24.04+:
+
 ```bash
+pip install -e . --user
+```
+
+**Update to new version:**
+```bash
+pip install -e . --user --force-reinstall
+```
+
+**Uninstall:**
+```bash
+pip uninstall voice-to-text
+```
+
+**Run:**
+```bash
+voice-to-text  # Command available globally from ~/.local/bin
+```
+
+---
+
+### Alternative: pipx (Option 2)
+
+Best for system-wide isolation. Requires pipx installed:
+
+```bash
+sudo apt install pipx
+pipx install -e /path/to/voz_a_texto
+```
+
+**Update to new version:**
+```bash
+pipx reinstall voice-to-text
+```
+
+**Uninstall:**
+```bash
+pipx uninstall voice-to-text
+```
+
+**Run:**
+```bash
+voice-to-text  # Works globally
+```
+
+---
+
+### Alternative: Virtual Environment (Option 1)
+
+Best for development. Requires manual environment activation:
+
+```bash
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 ```
 
-Or install with development dependencies:
+**Update to new version:**
+```bash
+source venv/bin/activate
+pip install -e . --force-reinstall
+```
+
+**Uninstall:**
+```bash
+deactivate
+rm -rf venv
+```
+
+**Run:**
+```bash
+source venv/bin/activate
+voice-to-text
+```
+
+Or add to PATH permanently in `~/.bashrc`:
+```bash
+export PATH="/path/to/voz_a_texto/venv/bin:$PATH"
+```
+
+---
+
+### With Development Dependencies
+
+If you want to contribute or run tests, install dev dependencies:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]" --user
+# Or with pipx:
+pipx install -e /path/to/voz_a_texto[dev]
+# Or with venv:
+source venv/bin/activate && pip install -e ".[dev]"
 ```
 
 ## System Dependencies
 
 ### Linux (Ubuntu/Debian)
 
-For the copy-to-clipboard feature, you need a clipboard tool:
+For the copy-to-clipboard feature, you need a clipboard tool. This is required for the `[C] Copy original` menu option:
 
 **Wayland (default on Ubuntu 24.04+):**
 ```bash
@@ -46,6 +134,35 @@ sudo apt-get install wl-clipboard
 ```bash
 sudo apt-get install xclip
 ```
+
+#### Clipboard Troubleshooting
+
+The application uses `pyperclip` to access the clipboard, which relies on external tools:
+- **Wayland**: Uses `wl-copy` and `wl-paste` from `wl-clipboard`
+- **X11**: Uses `xclip` or `xsel`
+
+**If the copy feature shows "Clipboard not available" error:**
+
+1. **Verify clipboard tool is installed:**
+   ```bash
+   which wl-copy     # For Wayland
+   which xclip       # For X11
+   ```
+
+2. **Check your display server:**
+   ```bash
+   echo $XDG_SESSION_TYPE  # Shows 'wayland' or 'x11'
+   ```
+
+3. **Installation method matters**: 
+   - If you used **Option 1 (venv)** without activating, `pyperclip` won't find system tools
+   - If you used **Option 3 (--user)** without proper PATH, command might not work
+   - **Option 2 (pipx)** typically handles this best as it creates an isolated environment with proper PATH configuration
+
+4. **Solution**: 
+   - Ensure clipboard tool is installed for your display server
+   - For venv: Always activate the environment before running
+   - For --user install: Ensure `~/.local/bin` is in your PATH
 
 ## Usage
 

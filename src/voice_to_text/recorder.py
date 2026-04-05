@@ -7,8 +7,7 @@ import subprocess
 import tempfile
 import threading
 import time
-import wave
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from .config import CHANNELS, SAMPLE_RATE
 
@@ -17,31 +16,35 @@ logger = logging.getLogger(__name__)
 
 class RecorderError(Exception):
     """Base exception for recorder errors."""
+
     pass
 
 
 class ArecordNotFoundError(RecorderError):
     """Raised when arecord command is not available."""
+
     pass
 
 
 class MicrophonePermissionError(RecorderError):
     """Raised when microphone permission is denied."""
+
     pass
 
 
 class MicrophoneNotFoundError(RecorderError):
     """Raised when no microphone is found."""
+
     pass
 
 
 def detect_audio_devices() -> List[str]:
     """Detect available audio recording devices using ALSA."""
     devices = []
-    
+
     if not shutil.which("arecord"):
         return devices
-    
+
     try:
         result = subprocess.run(
             ["arecord", "-l"],
@@ -55,29 +58,36 @@ def detect_audio_devices() -> List[str]:
                     parts = line.split(":")
                     if parts:
                         card_info = parts[0].strip()
-                        card_num = card_info.split()[1] if len(card_info.split()) > 1 else None
+                        card_num = (
+                            card_info.split()[1] if len(card_info.split()) > 1 else None
+                        )
                         if card_num:
                             devices.append(f"hw:{card_num},0")
     except Exception as e:
         logger.debug(f"Error detecting audio devices: {e}")
-    
+
     return devices
 
 
 def find_working_microphone() -> Optional[str]:
     """Find the first working microphone device."""
     devices = detect_audio_devices()
-    
+
     for device in devices:
         try:
             result = subprocess.run(
                 [
                     "arecord",
-                    "-D", device,
-                    "-f", "S16_LE",
-                    "-r", str(SAMPLE_RATE),
-                    "-c", str(CHANNELS),
-                    "-d", "1",
+                    "-D",
+                    device,
+                    "-f",
+                    "S16_LE",
+                    "-r",
+                    str(SAMPLE_RATE),
+                    "-c",
+                    str(CHANNELS),
+                    "-d",
+                    "1",
                     "/dev/null",
                 ],
                 capture_output=True,
@@ -88,16 +98,21 @@ def find_working_microphone() -> Optional[str]:
         except Exception as e:
             logger.debug(f"Error testing device {device}: {e}")
             continue
-    
+
     try:
         result = subprocess.run(
             [
                 "arecord",
-                "-D", "default",
-                "-f", "S16_LE",
-                "-r", str(SAMPLE_RATE),
-                "-c", str(CHANNELS),
-                "-d", "1",
+                "-D",
+                "default",
+                "-f",
+                "S16_LE",
+                "-r",
+                str(SAMPLE_RATE),
+                "-c",
+                str(CHANNELS),
+                "-d",
+                "1",
                 "/dev/null",
             ],
             capture_output=True,
@@ -107,7 +122,7 @@ def find_working_microphone() -> Optional[str]:
             return "default"
     except Exception as e:
         logger.debug(f"Error testing default device: {e}")
-    
+
     return None
 
 
@@ -137,11 +152,16 @@ class Recorder:
             result = subprocess.run(
                 [
                     "arecord",
-                    "-D", self.device,
-                    "-f", "S16_LE",
-                    "-r", str(SAMPLE_RATE),
-                    "-c", str(CHANNELS),
-                    "-d", "1",
+                    "-D",
+                    self.device,
+                    "-f",
+                    "S16_LE",
+                    "-r",
+                    str(SAMPLE_RATE),
+                    "-c",
+                    str(CHANNELS),
+                    "-d",
+                    "1",
                     "/dev/null",
                 ],
                 capture_output=True,
@@ -163,10 +183,10 @@ class Recorder:
 
     def validate_prerecording(self, test_duration: int = 2) -> Tuple[bool, str]:
         """Validate microphone works before starting a long recording.
-        
+
         Args:
             test_duration: Duration in seconds to test the microphone (default 2s)
-            
+
         Returns:
             Tuple of (success, message)
         """
@@ -175,44 +195,52 @@ class Recorder:
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             test_file = f.name
-        
+
         try:
             proc = subprocess.Popen(
                 [
                     "arecord",
-                    "-D", self.device,
-                    "-f", "S16_LE",
-                    "-r", str(SAMPLE_RATE),
-                    "-c", str(CHANNELS),
-                    "-d", str(test_duration),
+                    "-D",
+                    self.device,
+                    "-f",
+                    "S16_LE",
+                    "-r",
+                    str(SAMPLE_RATE),
+                    "-c",
+                    str(CHANNELS),
+                    "-d",
+                    str(test_duration),
                     test_file,
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
-            
+
             _, stderr = proc.communicate(timeout=test_duration + 2)
-            
+
             if proc.returncode != 0:
                 if b"Permission denied" in stderr or proc.returncode == 13:
                     return False, "Permission denied"
                 if b"no such device" in stderr or b"not found" in stderr:
                     return False, "Device not found"
                 return False, f"Recording failed (code {proc.returncode})"
-            
+
             if not os.path.exists(test_file):
                 return False, "Audio file not created"
-            
+
             file_size = os.path.getsize(test_file)
             if file_size < 1000:
-                return False, "No audio detected - microphone may be muted or disconnected"
-            
+                return (
+                    False,
+                    "No audio detected - microphone may be muted or disconnected",
+                )
+
             expected_size = SAMPLE_RATE * CHANNELS * 2 * test_duration
             if file_size < expected_size * 0.5:
-                return False, f"Audio too quiet or device not working properly"
-            
+                return False, "Audio too quiet or device not working properly"
+
             return True, "Microphone validated successfully"
-            
+
         except subprocess.TimeoutExpired:
             return False, "Recording test timed out"
         except PermissionError:
@@ -227,8 +255,6 @@ class Recorder:
 
     def start_recording(self) -> Optional[str]:
         """Start recording and return audio path."""
-        import struct
-        
         if not self.check_arecord_available():
             raise ArecordNotFoundError(
                 "arecord not found. Please install ALSA utilities (sudo apt install alsa-utils)"
@@ -241,21 +267,26 @@ class Recorder:
             self._process = subprocess.Popen(
                 [
                     "arecord",
-                    "-D", self.device,
-                    "-f", "S16_LE",
-                    "-r", str(SAMPLE_RATE),
-                    "-c", str(CHANNELS),
-                    "-t", "raw",
+                    "-D",
+                    self.device,
+                    "-f",
+                    "S16_LE",
+                    "-r",
+                    str(SAMPLE_RATE),
+                    "-c",
+                    str(CHANNELS),
+                    "-t",
+                    "raw",
                     "-",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             )
             self._audio_path = audio_path
-            self._audio_file_handle = open(audio_path, 'wb')
-            
+            self._audio_file_handle = open(audio_path, "wb")
+
             self._write_wav_header(self._audio_file_handle)
-            
+
             self._monitoring = True
             self._current_level = 0.0
             self._level_monitor_thread = threading.Thread(
@@ -263,7 +294,7 @@ class Recorder:
                 daemon=True,
             )
             self._level_monitor_thread.start()
-            
+
             return audio_path
         except PermissionError as e:
             raise MicrophonePermissionError(
@@ -283,53 +314,55 @@ class Recorder:
     def _write_wav_header(self, f):
         """Write WAV header (will be updated with correct size on stop)."""
         import struct
-        
-        f.write(b'RIFF')
-        f.write(struct.pack('<I', 0))
-        f.write(b'WAVE')
-        f.write(b'fmt ')
-        f.write(struct.pack('<I', 16))
-        f.write(struct.pack('<H', 1))
-        f.write(struct.pack('<H', CHANNELS))
-        f.write(struct.pack('<I', SAMPLE_RATE))
-        f.write(struct.pack('<I', SAMPLE_RATE * CHANNELS * 2))
-        f.write(struct.pack('<H', CHANNELS * 2))
-        f.write(struct.pack('<H', 16))
-        f.write(b'data')
-        f.write(struct.pack('<I', 0))
+
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 0))
+        f.write(b"WAVE")
+        f.write(b"fmt ")
+        f.write(struct.pack("<I", 16))
+        f.write(struct.pack("<H", 1))
+        f.write(struct.pack("<H", CHANNELS))
+        f.write(struct.pack("<I", SAMPLE_RATE))
+        f.write(struct.pack("<I", SAMPLE_RATE * CHANNELS * 2))
+        f.write(struct.pack("<H", CHANNELS * 2))
+        f.write(struct.pack("<H", 16))
+        f.write(b"data")
+        f.write(struct.pack("<I", 0))
 
     def _update_wav_header(self, f, data_size: int):
         """Update WAV header with correct sizes."""
         import struct
-        
+
         f.seek(4)
-        f.write(struct.pack('<I', 36 + data_size))
+        f.write(struct.pack("<I", 36 + data_size))
         f.seek(40)
-        f.write(struct.pack('<I', data_size))
+        f.write(struct.pack("<I", data_size))
 
     def _read_audio_stream(self):
         """Read audio from arecord stdout, write to file, calculate levels."""
         import struct
-        
+
         if not self._process or not self._audio_file_handle:
             return
-        
+
         if not self._process.stdout:
             return
-        
+
         chunk_size = 3200
         stdout = self._process.stdout
-        
+
         while self._monitoring and self._process.poll() is None:
             try:
                 data = stdout.read(chunk_size)
                 if not data:
                     break
-                
+
                 self._audio_file_handle.write(data)
-                
+
                 if len(data) >= 2:
-                    samples = struct.unpack(f'<{len(data)//2}h', data[:len(data)//2*2])
+                    samples = struct.unpack(
+                        f"<{len(data) // 2}h", data[: len(data) // 2 * 2]
+                    )
                     if samples:
                         max_sample = max(abs(s) for s in samples)
                         self._current_level = min(1.0, max_sample / 32768.0)
@@ -347,39 +380,41 @@ class Recorder:
     def stop_recording(self) -> bool:
         """Stop recording and finalize WAV file."""
         self._stop_level_monitoring()
-        
+
         if self._process:
             self._process.terminate()
             self._process.wait()
             self._process = None
-        
+
         if self._audio_file_handle:
             data_size = self._audio_file_handle.tell() - 44
             self._update_wav_header(self._audio_file_handle, data_size)
             self._audio_file_handle.close()
             self._audio_file_handle = None
-        
+
         self._audio_path = None
         return True
 
-    def record(self, duration: int, progress_callback=None, validate_mic: bool = True) -> Optional[str]:
+    def record(
+        self, duration: int, progress_callback=None, validate_mic: bool = True
+    ) -> Optional[str]:
         """Record audio for specified duration with optional progress callback.
-        
+
         Args:
             duration: Recording duration in seconds (max 300)
             progress_callback: Optional callback(current, total)
             validate_mic: If True, run pre-recording mic validation for longer recordings
-            
+
         Returns:
             Path to recorded audio file, or None if failed
         """
         from .config import MAX_DURATION
-        
+
         self._interrupted = False
-        
+
         if duration > MAX_DURATION:
             duration = MAX_DURATION
-        
+
         if duration > 10 and validate_mic:
             valid, message = self.validate_prerecording(test_duration=2)
             if not valid:
@@ -414,10 +449,10 @@ class Recorder:
                 print()
 
             self.stop_recording()
-            
+
             if os.path.getsize(audio_path) < 1000:
                 return None
-            
+
             return audio_path
 
         except Exception as e:

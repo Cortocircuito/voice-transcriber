@@ -11,15 +11,15 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 
-from .cli import CLI, main
-from .config import Config
-from .configurator import ConfigManager
-from .dictation import DictationManager
-from .i18n import get_text, get_language_label
-from .practice import PracticeManager
-from .recorder import Recorder
-from .transcriber import Transcriber
-from .ui import UI
+from .cli import CLI, main  # noqa: E402
+from .config import Config  # noqa: E402
+from .configurator import ConfigManager  # noqa: E402
+from .dictation import DictationManager  # noqa: E402
+from .i18n import get_text, get_language_label  # noqa: E402
+from .practice import PracticeManager  # noqa: E402
+from .recorder import Recorder  # noqa: E402
+from .transcriber import Transcriber  # noqa: E402
+from .ui import UI  # noqa: E402
 
 __all__ = [
     "CLI",

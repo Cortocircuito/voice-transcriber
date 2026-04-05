@@ -2,19 +2,24 @@
 
 import re
 import time
-from typing import Callable, Optional
 
 from rich.console import Console, Group
 from rich.live import Live
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 from rich.style import Style
 from rich.text import Text
 
 from .comparison import TextComparator
-from .config import Config, WORDS_PER_PAGE_MAX, WORDS_PER_PAGE_MIN
+from .config import Config, WORDS_PER_PAGE_MAX
 from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
-from .i18n import get_language_label, get_text
+from .i18n import get_language_label
 from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
@@ -106,7 +111,9 @@ class DictationManager:
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
         )
-        task = progress.add_task(f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration)
+        task = progress.add_task(
+            f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration
+        )
 
         def generate_display():
             elapsed = time.time() - start_time
@@ -126,7 +133,7 @@ class DictationManager:
             level_display.append("🎤 ")
             level_display.append("Level: ")
             level_display.append(level_bar, style=Style(color=color, bold=True))
-            level_display.append(f"  {level*100:3.0f}%")
+            level_display.append(f"  {level * 100:3.0f}%")
 
             return Group(progress, level_display)
 
@@ -144,8 +151,6 @@ class DictationManager:
 
     def _split_text_into_pages(self, text: str) -> list[tuple[str, int]]:
         """Split text into pages by paragraphs."""
-        import math
-
         paragraphs = re.split(r"\n\n+", text)
 
         pages = []
