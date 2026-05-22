@@ -592,6 +592,47 @@ class LessonManager:
         """Get all cached lessons."""
         return self._load_cache()
 
+    def is_cache_expired(self) -> bool:
+        """Check if the cache exists but is older than 24 hours.
+
+        Returns:
+            True if cache file exists and is expired, False otherwise.
+        """
+        if not self._index_file.exists():
+            return False
+        try:
+            with open(self._index_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            timestamp = data.get("timestamp", "")
+            if not timestamp:
+                return False
+            cache_time = datetime.fromisoformat(timestamp)
+            age_hours = (datetime.now() - cache_time).total_seconds() / 3600
+            return age_hours > 24
+        except Exception:
+            return False
+
+    def get_stale_cached_lessons(self) -> list[Lesson]:
+        """Load cached lessons regardless of age (bypasses 24h expiry check).
+
+        Returns:
+            List of cached lessons, or empty list if no cache file exists.
+        """
+        if not self._index_file.exists():
+            return []
+        try:
+            with open(self._index_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            lessons = []
+            for item in data.get("lessons", []):
+                lesson = Lesson.from_dict(item)
+                lessons.append(lesson)
+                self._cache[lesson.url] = lesson
+            return lessons
+        except Exception as e:
+            logger.error(f"Failed to load stale cache: {e}")
+            return []
+
     def clear_cache(self) -> bool:
         """Clear the lesson cache."""
         try:

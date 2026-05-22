@@ -198,8 +198,13 @@ class UI:
             f"[{COLOR_SUCCESS}]{get_text('lessons_download_complete', lang)}[/{COLOR_SUCCESS}]"
         )
 
-    def confirm_lesson_download(self) -> bool:
+    def confirm_lesson_download(
+        self, prompt_key: str = "lessons_download_prompt"
+    ) -> bool:
         """Ask user if they want to download lessons.
+
+        Args:
+            prompt_key: i18n key for the prompt message.
 
         Returns:
             True if user confirms, False otherwise
@@ -207,7 +212,7 @@ class UI:
         lang = self.config.ui_language
         while True:
             choice = self.console.input(
-                f"[bold {ACCENT}]{get_text('lessons_download_prompt', lang)}[/bold {ACCENT}] "
+                f"[bold {ACCENT}]{get_text(prompt_key, lang)}[/bold {ACCENT}] "
             )
             choice_lower = choice.strip().lower()
             if choice_lower in ("y", "yes", get_text("yes", lang).lower()):

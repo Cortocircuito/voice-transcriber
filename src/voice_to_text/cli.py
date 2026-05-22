@@ -102,9 +102,41 @@ class CLI:
             if choice == "1":
                 self.dictation_manager.run()
             elif choice == "2":
-                _set_quiet_mode(False)
-                self.practice_manager.run()
-                _set_quiet_mode(CLI._quiet_mode)
+                if self.lesson_manager.is_preloading():
+                    self.ui.show_warning(
+                        get_text("lessons_downloading", self.config.ui_language)
+                    )
+                elif not self.lesson_manager.get_cached_lessons():
+                    if not self.lesson_manager.is_cache_expired():
+                        # No cache at all
+                        if self.ui.confirm_lesson_download():
+                            CLI._quiet_mode = True
+                            _set_quiet_mode(True)
+                            self.lesson_manager.preload_lessons_async()
+                    else:
+                        # Cache exists but is expired
+                        if self.ui.confirm_lesson_download(
+                            prompt_key="lessons_outdated_prompt"
+                        ):
+                            CLI._quiet_mode = True
+                            _set_quiet_mode(True)
+                            self.lesson_manager.preload_lessons_async()
+                        else:
+                            stale = self.lesson_manager.get_stale_cached_lessons()
+                            if stale:
+                                self.ui.show_warning(
+                                    get_text(
+                                        "lessons_using_outdated",
+                                        self.config.ui_language,
+                                    )
+                                )
+                                _set_quiet_mode(False)
+                                self.practice_manager.run()
+                                _set_quiet_mode(CLI._quiet_mode)
+                else:
+                    _set_quiet_mode(False)
+                    self.practice_manager.run()
+                    _set_quiet_mode(CLI._quiet_mode)
             elif choice == "3":
                 self.config_manager.run()
             elif choice == "4":
@@ -117,13 +149,6 @@ class CLI:
         self.ui.console.print(
             f"[dim]{get_text('ready', self.config.ui_language)}[/dim]"
         )
-
-        cached_lessons = self.lesson_manager.get_cached_lessons()
-        if not cached_lessons:
-            if self.ui.confirm_lesson_download():
-                CLI._quiet_mode = True
-                _set_quiet_mode(True)
-                self.lesson_manager.preload_lessons_async()
 
         self.transcriber.load_model()
 
