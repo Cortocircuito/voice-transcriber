@@ -131,7 +131,7 @@ class CLI:
                                     )
                                 )
                                 _set_quiet_mode(False)
-                                self.practice_manager.run()
+                                self.practice_manager.run(lessons=stale)
                                 _set_quiet_mode(CLI._quiet_mode)
                 else:
                     _set_quiet_mode(False)

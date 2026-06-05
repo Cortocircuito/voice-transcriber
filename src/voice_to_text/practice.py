@@ -3,6 +3,7 @@
 import logging
 import math
 import re
+from typing import Optional
 
 from .comparison import TextComparator
 from .config import Config
@@ -38,21 +39,27 @@ class PracticeManager:
         self.lesson_manager = lesson_manager
         self.comparator = TextComparator()
 
-    def run(self) -> None:
-        """Run the lesson practice mode."""
+    def run(self, lessons: Optional[list[Lesson]] = None) -> None:
+        """Run the lesson practice mode.
+
+        Args:
+            lessons: Pre-loaded lessons to use directly, skipping the fetch
+                step. Pass stale lessons here when the user has declined to
+                download an update so that no network request is made.
+        """
         lang = self.config.ui_language
-        lessons = []
         is_offline = False
 
         logging.getLogger(LESSONS_LOGGER).setLevel(logging.INFO)
 
-        self.ui.show_lessons_loading()
+        if lessons is None:
+            self.ui.show_lessons_loading()
 
-        try:
-            lessons = self.lesson_manager.fetch_lessons(use_cache=True)
-        except NetworkError:
-            lessons = self.lesson_manager.get_cached_lessons()
-            is_offline = True
+            try:
+                lessons = self.lesson_manager.fetch_lessons(use_cache=True)
+            except NetworkError:
+                lessons = self.lesson_manager.get_cached_lessons()
+                is_offline = True
 
         if not lessons:
             if self.lesson_manager.preload_succeeded():
