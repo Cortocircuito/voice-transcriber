@@ -261,12 +261,15 @@ pre-commit install
 ```
 src/voice_to_text/
 ├── cli.py           # Command-line interface
+├── comparison.py    # Transcription vs. lesson text diff/scoring
 ├── config.py        # Configuration dataclass
 ├── configurator.py  # Settings management
+├── constants.py     # Shared constants
 ├── dictation.py     # Dictation mode
-├── history.py      # Transcription history
+├── history.py       # Transcription history
 ├── i18n.py          # Internationalization
 ├── lessons.py       # Lesson fetching & parsing
+├── phonetics.py     # IPA phonetic transcription
 ├── practice.py      # Lesson practice mode
 ├── recorder.py      # Audio recording
 ├── transcriber.py   # Speech transcription
