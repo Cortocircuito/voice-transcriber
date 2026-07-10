@@ -142,6 +142,50 @@ class TestCLI:
 
             mock_history.save.assert_called_once()
 
+    def test_cleanup_is_idempotent(self, mock_config, mock_history):
+        """Calling cleanup twice saves history only once."""
+        mock_history.get_entries = MagicMock(return_value=[{"text": "test"}])
+
+        with (
+            patch("voice_to_text.cli.Recorder"),
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.LessonManager"),
+        ):
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._cleanup()
+            cli._cleanup()
+
+            mock_history.save.assert_called_once()
+            mock_ui_instance.console.print.assert_called_once()
+
+    def test_signal_handler_then_atexit_saves_once(self, mock_config, mock_history):
+        """SIGINT handler + the atexit cleanup it triggers save only once."""
+        mock_history.get_entries = MagicMock(return_value=[{"text": "test"}])
+
+        with (
+            patch("voice_to_text.cli.Recorder"),
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.LessonManager"),
+            patch("voice_to_text.cli.sys.exit") as mock_exit,
+        ):
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._signal_handler(2, None)
+            # atexit would then invoke _cleanup a second time.
+            cli._cleanup()
+
+            mock_exit.assert_called_once_with(0)
+            mock_history.save.assert_called_once()
+
 
 class TestCLIArguments:
     """Tests for CLI argument parsing."""

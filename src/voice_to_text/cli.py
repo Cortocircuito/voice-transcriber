@@ -18,7 +18,6 @@ from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
 
-
 LESSONS_LOGGER = "voice_to_text.lessons"
 EXTERNAL_LOGGERS = ["httpx", "httpcore", "urllib3", "faster_whisper"]
 
@@ -36,6 +35,7 @@ class CLI:
 
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
+        self._cleaned_up = False
         self.recorder = Recorder(self.config.recording_device)
         self.transcriber = Transcriber(model_size=self.config.model_size)
         self.ui = UI(self.config)
@@ -72,7 +72,16 @@ class CLI:
         atexit.register(self._cleanup)
 
     def _cleanup(self):
-        """Cleanup on exit - save history."""
+        """Cleanup on exit - save history.
+
+        Idempotent: the SIGINT handler calls this and then ``sys.exit(0)``,
+        which fires the ``atexit`` handler that also calls it. Guard against
+        the second run so history is not saved (and the message not printed)
+        twice.
+        """
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
         entries = self.history.get_entries()
         if entries:
             self.ui.console.print(
