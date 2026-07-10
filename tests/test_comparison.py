@@ -1,7 +1,5 @@
 """Tests for text comparison module."""
 
-import pytest
-
 from voice_to_text.comparison import (
     TextComparator,
     ComparisonResult,
@@ -300,6 +298,65 @@ class TestFlexibleComparison:
         result = comparator.compare_flexible("hello world", "hello")
         assert result.accuracy < 1.0
         assert "world" in result.missing_words
+
+    def test_flexible_no_match_beyond_window(self):
+        """A word matching only far outside the window is not counted.
+
+        The repeated word appears again well beyond window_size positions;
+        the unbounded search would have matched it and inflated accuracy.
+        """
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "hello here",
+            "hello a b c d e here",
+            window_size=2,
+            use_phonetic=False,
+        )
+        # "here" is 5 positions past its expected spot -> out of the window.
+        assert "here" in result.missing_words
+        assert result.correct_count == 1
+
+    def test_flexible_phonetic_respects_window(self):
+        """Phonetic matches are bounded to the window, not the whole text."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "cat",
+            "x x x x cot",
+            window_size=2,
+            use_phonetic=True,
+        )
+        # "cot" phonetically matches "cat" but sits far outside the window,
+        # so it must not be counted as a match.
+        assert result.correct_count == 0
+        assert "cat" in result.missing_words
+
+    def test_flexible_anchor_tracks_after_insertions(self):
+        """Anchor follows matches, so later words align despite early inserts.
+
+        Extra words early on push the real matches forward; the window must
+        follow the last match rather than the original index.
+        """
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "one two three",
+            "one x x two x x three",
+            window_size=2,
+        )
+        assert result.accuracy == 1.0
+        assert result.correct_count == 3
+
+    def test_flexible_substitution_marks_extra(self):
+        """A substituted word is missing and the wrong word is extra."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "the cat sat",
+            "the dog sat",
+            window_size=2,
+            use_phonetic=False,
+        )
+        assert "cat" in result.missing_words
+        assert "dog" in result.extra_words
+        assert result.correct_count == 2
 
 
 class TestPerWordComparison:

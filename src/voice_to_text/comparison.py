@@ -525,13 +525,25 @@ class TextComparator:
         # Tracks which transcribed positions have been matched
         matched_trans_positions: set[int] = set()
 
+        # Anchor for the search window: the transcript position we expect the
+        # next original word around. It advances to one past each match, so it
+        # tracks reading progress instead of the original index. On a miss it
+        # stays put, keeping the window over the same region for the next word
+        # (handles runs of deletions without the anchor running ahead).
+        expected_pos = 0
+
         for orig_idx, orig_word in enumerate(original_normalized):
             found_pos = -1
 
-            search_start = max(0, orig_idx - window_size)
+            # Bounded window on both sides of the anchor. This is what keeps a
+            # word from matching an identical one far away in the transcript.
+            window_start = max(0, expected_pos - window_size)
+            window_end = min(
+                len(transcribed_normalized), expected_pos + window_size + 1
+            )
 
-            # 1. Buscar coincidencia exacta en la ventana
-            for trans_idx in range(search_start, len(transcribed_normalized)):
+            # 1. Exact match within the window.
+            for trans_idx in range(window_start, window_end):
                 if trans_idx in matched_trans_positions:
                     continue
 
@@ -540,8 +552,9 @@ class TextComparator:
                     matched_trans_positions.add(trans_idx)
                     break
 
+            # 2. Phonetic match within the same window (not the whole transcript).
             if found_pos < 0 and use_phonetic:
-                for trans_idx in range(len(transcribed_normalized)):
+                for trans_idx in range(window_start, window_end):
                     if trans_idx in matched_trans_positions:
                         continue
 
@@ -551,6 +564,9 @@ class TextComparator:
                         found_pos = trans_idx
                         matched_trans_positions.add(trans_idx)
                         break
+
+            if found_pos >= 0:
+                expected_pos = found_pos + 1
 
             orig_word_raw = (
                 original_words_raw[orig_idx]
