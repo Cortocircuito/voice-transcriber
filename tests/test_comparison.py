@@ -403,6 +403,72 @@ class TestPerWordComparison:
         assert "extra" in result.extra_words
 
 
+class TestContractionAlignment:
+    """Error/highlight indices must stay aligned with raw words.
+
+    normalize_text expands contractions ("I'm" -> "i am"), making the
+    normalized token list longer than the raw word list. These tests pin the
+    fix that maps normalized positions back to raw word indices so highlights
+    do not drift off by one (or out of range) after a contraction.
+    """
+
+    def _assert_indices_in_range(self, result):
+        for i in result.orig_error_indices:
+            assert 0 <= i < len(result.original_words)
+        for i in result.trans_error_indices:
+            assert 0 <= i < len(result.transcribed_words)
+        for idx, _orig, _got in result.errors:
+            assert 0 <= idx < len(result.original_words)
+
+    def test_tokenize_aligned_maps_contraction(self):
+        """A contraction yields several tokens mapped to one raw word."""
+        raw, norm, mapping = TextComparator._tokenize_aligned("I can't go")
+        assert raw == ["I", "can't", "go"]
+        assert norm == ["i", "can", "not", "go"]
+        # "can" and "not" both come from raw word index 1 ("can't").
+        assert mapping == [0, 1, 1, 2]
+
+    def test_compare_substitution_after_contraction(self):
+        """Legacy compare() flags the right raw word after a contraction."""
+        comparator = TextComparator()
+        result = comparator.compare("I can't go", "I can't stop")
+        # "go" is raw index 2; the old code recorded index 3 (out of range).
+        assert (2, "go", "stop") in result.errors
+        assert 2 in result.orig_error_indices
+        assert result.correct_count == 3
+        self._assert_indices_in_range(result)
+
+    def test_flexible_substitution_after_contraction(self):
+        """Flexible (default) keeps highlights aligned after a contraction."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "I can't go", "I can't stop", use_phonetic=False
+        )
+        assert result.correct_count == 3
+        assert 2 in result.orig_error_indices
+        assert "go" in result.missing_words
+        assert "stop" in result.extra_words
+        self._assert_indices_in_range(result)
+
+    def test_per_word_missing_after_contraction(self):
+        """Per-word maps a missing word past a contraction to its raw index."""
+        comparator = TextComparator()
+        result = comparator.compare_per_word("I can't go", "I can't")
+        assert 2 in result.orig_error_indices
+        assert "go" in result.missing_words
+        assert result.correct_count == 3
+        self._assert_indices_in_range(result)
+
+    def test_contraction_not_double_reported(self):
+        """A wholly-missed contraction is listed once, not per sub-token."""
+        comparator = TextComparator()
+        result = comparator.compare("I can't go home", "I go home")
+        # "can't" expands to two normalized tokens but is one raw word.
+        cant_errors = [e for e in result.errors if e[1] == "can't"]
+        assert len(cant_errors) == 1
+        self._assert_indices_in_range(result)
+
+
 class TestCompareWithMethod:
     """Tests for the compare_with_method dispatcher used by practice mode."""
 
