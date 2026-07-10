@@ -1,7 +1,5 @@
 """Tests for text comparison module."""
 
-import pytest
-
 from voice_to_text.comparison import (
     TextComparator,
     ComparisonResult,
@@ -280,9 +278,7 @@ class TestFlexibleComparison:
         comparator = TextComparator()
         # Palabra desplazada por una palabra extra
         result = comparator.compare_flexible(
-            "hello world test",
-            "hello there world test",
-            window_size=2
+            "hello world test", "hello there world test", window_size=2
         )
         # "world" y "test" deberían encontrarse
         assert result.accuracy == 1.0
@@ -291,10 +287,7 @@ class TestFlexibleComparison:
         """Test flexible comparison with phonetic matching."""
         comparator = TextComparator()
         result = comparator.compare_flexible(
-            "hello world",
-            "hi world",
-            window_size=2,
-            use_phonetic=True
+            "hello world", "hi world", window_size=2, use_phonetic=True
         )
         # "hello" y "hi" deberían coincidir fonéticamente
         assert result.accuracy == 1.0
@@ -305,6 +298,65 @@ class TestFlexibleComparison:
         result = comparator.compare_flexible("hello world", "hello")
         assert result.accuracy < 1.0
         assert "world" in result.missing_words
+
+    def test_flexible_no_match_beyond_window(self):
+        """A word matching only far outside the window is not counted.
+
+        The repeated word appears again well beyond window_size positions;
+        the unbounded search would have matched it and inflated accuracy.
+        """
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "hello here",
+            "hello a b c d e here",
+            window_size=2,
+            use_phonetic=False,
+        )
+        # "here" is 5 positions past its expected spot -> out of the window.
+        assert "here" in result.missing_words
+        assert result.correct_count == 1
+
+    def test_flexible_phonetic_respects_window(self):
+        """Phonetic matches are bounded to the window, not the whole text."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "cat",
+            "x x x x cot",
+            window_size=2,
+            use_phonetic=True,
+        )
+        # "cot" phonetically matches "cat" but sits far outside the window,
+        # so it must not be counted as a match.
+        assert result.correct_count == 0
+        assert "cat" in result.missing_words
+
+    def test_flexible_anchor_tracks_after_insertions(self):
+        """Anchor follows matches, so later words align despite early inserts.
+
+        Extra words early on push the real matches forward; the window must
+        follow the last match rather than the original index.
+        """
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "one two three",
+            "one x x two x x three",
+            window_size=2,
+        )
+        assert result.accuracy == 1.0
+        assert result.correct_count == 3
+
+    def test_flexible_substitution_marks_extra(self):
+        """A substituted word is missing and the wrong word is extra."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "the cat sat",
+            "the dog sat",
+            window_size=2,
+            use_phonetic=False,
+        )
+        assert "cat" in result.missing_words
+        assert "dog" in result.extra_words
+        assert result.correct_count == 2
 
 
 class TestPerWordComparison:
@@ -321,8 +373,7 @@ class TestPerWordComparison:
         comparator = TextComparator()
         # Orden diferente
         result = comparator.compare_per_word(
-            "the cat sat on the mat",
-            "mat sat cat the on the"
+            "the cat sat on the mat", "mat sat cat the on the"
         )
         # Todas las palabras están presentes
         assert result.accuracy == 1.0
@@ -331,10 +382,7 @@ class TestPerWordComparison:
     def test_per_word_partial_match(self):
         """Test per-word comparison with partial match."""
         comparator = TextComparator()
-        result = comparator.compare_per_word(
-            "hello world",
-            "hello"
-        )
+        result = comparator.compare_per_word("hello world", "hello")
         assert result.accuracy == 0.5
         assert result.correct_count == 1
         assert "world" in result.missing_words
@@ -343,9 +391,7 @@ class TestPerWordComparison:
         """Test per-word comparison with phonetic matching."""
         comparator = TextComparator()
         result = comparator.compare_per_word(
-            "the cat sat",
-            "the cut sat",
-            use_phonetic=True
+            "the cat sat", "the cut sat", use_phonetic=True
         )
         # "cat" y "cut" deberían coincidir fonéticamente
         assert result.accuracy == 1.0
@@ -353,8 +399,119 @@ class TestPerWordComparison:
     def test_per_word_extra_words(self):
         """Test per-word comparison detects extra words."""
         comparator = TextComparator()
-        result = comparator.compare_per_word(
-            "hello world",
-            "hello world extra"
-        )
+        result = comparator.compare_per_word("hello world", "hello world extra")
         assert "extra" in result.extra_words
+
+
+class TestContractionAlignment:
+    """Error/highlight indices must stay aligned with raw words.
+
+    normalize_text expands contractions ("I'm" -> "i am"), making the
+    normalized token list longer than the raw word list. These tests pin the
+    fix that maps normalized positions back to raw word indices so highlights
+    do not drift off by one (or out of range) after a contraction.
+    """
+
+    def _assert_indices_in_range(self, result):
+        for i in result.orig_error_indices:
+            assert 0 <= i < len(result.original_words)
+        for i in result.trans_error_indices:
+            assert 0 <= i < len(result.transcribed_words)
+        for idx, _orig, _got in result.errors:
+            assert 0 <= idx < len(result.original_words)
+
+    def test_tokenize_aligned_maps_contraction(self):
+        """A contraction yields several tokens mapped to one raw word."""
+        raw, norm, mapping = TextComparator._tokenize_aligned("I can't go")
+        assert raw == ["I", "can't", "go"]
+        assert norm == ["i", "can", "not", "go"]
+        # "can" and "not" both come from raw word index 1 ("can't").
+        assert mapping == [0, 1, 1, 2]
+
+    def test_compare_substitution_after_contraction(self):
+        """Legacy compare() flags the right raw word after a contraction."""
+        comparator = TextComparator()
+        result = comparator.compare("I can't go", "I can't stop")
+        # "go" is raw index 2; the old code recorded index 3 (out of range).
+        assert (2, "go", "stop") in result.errors
+        assert 2 in result.orig_error_indices
+        assert result.correct_count == 3
+        self._assert_indices_in_range(result)
+
+    def test_flexible_substitution_after_contraction(self):
+        """Flexible (default) keeps highlights aligned after a contraction."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "I can't go", "I can't stop", use_phonetic=False
+        )
+        assert result.correct_count == 3
+        assert 2 in result.orig_error_indices
+        assert "go" in result.missing_words
+        assert "stop" in result.extra_words
+        self._assert_indices_in_range(result)
+
+    def test_per_word_missing_after_contraction(self):
+        """Per-word maps a missing word past a contraction to its raw index."""
+        comparator = TextComparator()
+        result = comparator.compare_per_word("I can't go", "I can't")
+        assert 2 in result.orig_error_indices
+        assert "go" in result.missing_words
+        assert result.correct_count == 3
+        self._assert_indices_in_range(result)
+
+    def test_contraction_not_double_reported(self):
+        """A wholly-missed contraction is listed once, not per sub-token."""
+        comparator = TextComparator()
+        result = comparator.compare("I can't go home", "I go home")
+        # "can't" expands to two normalized tokens but is one raw word.
+        cant_errors = [e for e in result.errors if e[1] == "can't"]
+        assert len(cant_errors) == 1
+        self._assert_indices_in_range(result)
+
+
+class TestCompareWithMethod:
+    """Tests for the compare_with_method dispatcher used by practice mode."""
+
+    def test_dispatch_legacy(self):
+        """Legacy method routes to strict difflib alignment."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "hello world", "hello world", method="legacy"
+        )
+        assert result.accuracy == 1.0
+        assert result.correct_count == 2
+
+    def test_dispatch_per_word_ignores_order(self):
+        """Per-word method routes to order-independent matching."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "the cat sat", "sat the cat", method="per_word"
+        )
+        assert result.accuracy == 1.0
+
+    def test_dispatch_flexible_tolerates_offset(self):
+        """Flexible method routes to window search tolerant of offsets."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "hello world test", "hello there world test", method="flexible"
+        )
+        assert result.accuracy == 1.0
+
+    def test_dispatch_unknown_falls_back_to_flexible(self):
+        """Unknown method names fall back to the flexible strategy."""
+        comparator = TextComparator()
+        unknown = comparator.compare_with_method(
+            "hello world test", "hello there world test", method="bogus"
+        )
+        flexible = comparator.compare_flexible(
+            "hello world test", "hello there world test"
+        )
+        assert unknown.accuracy == flexible.accuracy
+        assert unknown.correct_count == flexible.correct_count
+
+    def test_dispatch_default_is_flexible(self):
+        """Default method matches the flexible strategy."""
+        comparator = TextComparator()
+        default = comparator.compare_with_method("the cat sat", "the the cat sat")
+        flexible = comparator.compare_flexible("the cat sat", "the the cat sat")
+        assert default.accuracy == flexible.accuracy

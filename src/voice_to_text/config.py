@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from .constants import (
+    COMPARISON_METHODS,
     CONFIG_FILE_NAME,
+    DEFAULT_COMPARISON_METHOD as CONSTANTS_DEFAULT_COMPARISON_METHOD,
     MAX_DURATION as CONSTANTS_MAX_DURATION,
     MIN_DURATION as CONSTANTS_MIN_DURATION,
     WORDS_PER_MINUTE,
@@ -51,6 +53,7 @@ DEFAULT_LANGUAGE = "en"
 DEFAULT_UI_LANGUAGE = "en"
 DEFAULT_MODEL_SIZE = "base"
 DEFAULT_READING_SPEED = 150
+DEFAULT_COMPARISON_METHOD = CONSTANTS_DEFAULT_COMPARISON_METHOD
 SAMPLE_RATE = 16000
 CHANNELS = 1
 MIN_DURATION = CONSTANTS_MIN_DURATION
@@ -71,6 +74,7 @@ class Config:
     recording_device: Optional[str] = DEFAULT_DEVICE
     model_size: str = DEFAULT_MODEL_SIZE
     words_per_minute: int = DEFAULT_READING_SPEED
+    comparison_method: str = DEFAULT_COMPARISON_METHOD
 
     def validate_duration(self, value: str) -> int:
         try:
@@ -126,6 +130,8 @@ class Config:
                 config.model_size = data["model_size"]
             if "words_per_minute" in data:
                 config.words_per_minute = data["words_per_minute"]
+            if data.get("comparison_method") in COMPARISON_METHODS:
+                config.comparison_method = data["comparison_method"]
 
             return config
         except (json.JSONDecodeError, IOError) as e:
@@ -153,6 +159,7 @@ class Config:
                 "recording_device": self.recording_device,
                 "model_size": self.model_size,
                 "words_per_minute": self.words_per_minute,
+                "comparison_method": self.comparison_method,
             }
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)

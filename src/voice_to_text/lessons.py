@@ -684,3 +684,13 @@ class LessonManager:
             except Exception:
                 pass
         return self._load_cache()
+
+    def shutdown(self) -> None:
+        """Release the preload executor without blocking exit.
+
+        The executor's worker thread is non-daemon, so without this the
+        interpreter joins it at exit and hangs while a background download is
+        in flight. ``cancel_futures`` drops any not-yet-started work; a request
+        already running still finishes, but it is bounded by the fetch timeout.
+        """
+        self._executor.shutdown(wait=False, cancel_futures=True)

@@ -53,6 +53,14 @@ MAX_READING_SPEED = 300
 MIN_DURATION = 1
 MAX_DURATION = 300
 
+# Text comparison (practice mode)
+# "flexible": window search, tolerant to word offsets (default)
+# "per_word": order-independent presence check
+# "legacy": strict difflib sequential alignment
+COMPARISON_METHODS = ("flexible", "per_word", "legacy")
+DEFAULT_COMPARISON_METHOD = "flexible"
+COMPARISON_WINDOW_SIZE = 2
+
 # Config file
 CONFIG_FILE_NAME = "config.json"
 

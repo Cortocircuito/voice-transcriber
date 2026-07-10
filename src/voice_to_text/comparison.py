@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .constants import COMPARISON_WINDOW_SIZE, DEFAULT_COMPARISON_METHOD
 
 CONTRACTIONS = {
     "i'm": "i am",
@@ -277,6 +278,95 @@ class TextComparator:
         words = re.findall(r"\b[\w\'-]+\b", text)
         return words
 
+    @staticmethod
+    def _normalize_raw_word(word: str) -> list[str]:
+        """Normalize a single raw word into its comparison token(s).
+
+        A contraction expands to several tokens ("can't" -> ["can", "not"])
+        and a hyphenated word splits too, mirroring :meth:`normalize_text` but
+        for one raw word at a time so the caller can track which raw word each
+        token came from.
+
+        Args:
+            word: A single raw word (as produced by ``get_original_words``)
+
+        Returns:
+            List of normalized tokens (possibly empty for pure punctuation)
+        """
+        lowered = word.lower().strip()
+        if lowered in CONTRACTIONS:
+            lowered = CONTRACTIONS[lowered]
+        cleaned = re.sub(r"[^\w\s]", " ", lowered)
+        return [token for token in cleaned.split() if token]
+
+    @classmethod
+    def _tokenize_aligned(cls, text: str) -> tuple[list[str], list[str], list[int]]:
+        """Tokenize text keeping raw and normalized tokens aligned.
+
+        Returns three parallel structures:
+
+        - ``raw_words``: display tokens (case and punctuation preserved)
+        - ``normalized_words``: comparison tokens (lowercased, punctuation
+          stripped, contractions expanded)
+        - ``norm_to_raw``: ``norm_to_raw[j]`` is the index of the raw word that
+          produced normalized token ``j``. Because contractions and hyphenated
+          words expand to several tokens, this map is what lets error/highlight
+          indices computed in normalized space point back at the correct raw
+          word (fixing the off-by-N drift after a contraction).
+
+        Args:
+            text: Text to tokenize
+
+        Returns:
+            Tuple of (raw_words, normalized_words, norm_to_raw)
+        """
+        raw_words = cls.get_original_words(text)
+        normalized_words: list[str] = []
+        norm_to_raw: list[int] = []
+        for raw_idx, raw_word in enumerate(raw_words):
+            for token in cls._normalize_raw_word(raw_word):
+                normalized_words.append(token)
+                norm_to_raw.append(raw_idx)
+        return raw_words, normalized_words, norm_to_raw
+
+    def compare_with_method(
+        self,
+        original: str,
+        transcribed: str,
+        method: str = DEFAULT_COMPARISON_METHOD,
+        window_size: int = COMPARISON_WINDOW_SIZE,
+        use_phonetic: bool = True,
+    ) -> ComparisonResult:
+        """Compare using the named strategy.
+
+        Single dispatch point used by practice mode so the comparison
+        algorithm is selectable via ``Config.comparison_method``.
+
+        Args:
+            original: Original lesson text to compare against
+            transcribed: Transcribed text from speech
+            method: One of ``COMPARISON_METHODS`` ("flexible", "per_word",
+                "legacy"). Unknown values fall back to the flexible method.
+            window_size: Search window for the flexible method
+            use_phonetic: Allow phonetic matches in addition to exact ones
+
+        Returns:
+            ComparisonResult with detailed analysis
+        """
+        if method == "legacy":
+            return self.compare(original, transcribed)
+        if method == "per_word":
+            return self.compare_per_word(
+                original, transcribed, use_phonetic=use_phonetic
+            )
+        # "flexible" and any unknown value fall back to the flexible method.
+        return self.compare_flexible(
+            original,
+            transcribed,
+            window_size=window_size,
+            use_phonetic=use_phonetic,
+        )
+
     def compare(self, original: str, transcribed: str) -> ComparisonResult:
         """Compare original text with transcription.
 
@@ -287,11 +377,33 @@ class TextComparator:
         Returns:
             ComparisonResult with detailed analysis
         """
-        original_words_raw = self.get_original_words(original)
-        transcribed_words_raw = self.get_original_words(transcribed)
+        # Aligned tokenization: raw words for display, normalized tokens for
+        # matching, and a map from each normalized token back to its raw word.
+        # difflib runs on the normalized tokens, so every raw lookup and error
+        # index below is translated through the map to avoid the off-by-N drift
+        # that contraction expansion ("I'm" -> "i am") used to introduce.
+        original_words_raw, original_normalized, orig_to_raw = self._tokenize_aligned(
+            original
+        )
+        (
+            transcribed_words_raw,
+            transcribed_normalized,
+            trans_to_raw,
+        ) = self._tokenize_aligned(transcribed)
 
-        original_normalized = self.normalize_text(original)
-        transcribed_normalized = self.normalize_text(transcribed)
+        def orig_raw_idx(pos: int) -> int:
+            return orig_to_raw[pos] if 0 <= pos < len(orig_to_raw) else -1
+
+        def trans_raw_idx(pos: int) -> int:
+            return trans_to_raw[pos] if 0 <= pos < len(trans_to_raw) else -1
+
+        def orig_raw_word(pos: int) -> str:
+            idx = orig_raw_idx(pos)
+            return original_words_raw[idx] if idx >= 0 else ""
+
+        def trans_raw_word(pos: int) -> str:
+            idx = trans_raw_idx(pos)
+            return transcribed_words_raw[idx] if idx >= 0 else ""
 
         matcher = difflib.SequenceMatcher(
             None, original_normalized, transcribed_normalized
@@ -304,6 +416,40 @@ class TextComparator:
         trans_error_indices: set[int] = set()
         correct_count = 0
 
+        def record_error(orig_pos: int, trans_pos: int, has_trans: bool) -> None:
+            """Record an error keyed by raw word index (deduped per raw word)."""
+            raw_idx = orig_raw_idx(orig_pos)
+            orig_word = orig_raw_word(orig_pos)
+            trans_word = trans_raw_word(trans_pos) if has_trans else ""
+            if has_trans:
+                t_idx = trans_raw_idx(trans_pos)
+                if t_idx >= 0:
+                    trans_error_indices.add(t_idx)
+            if raw_idx >= 0:
+                orig_error_indices.add(raw_idx)
+            matches.append(
+                WordMatch(
+                    original=orig_word,
+                    transcribed=trans_word,
+                    is_match=False,
+                    index=raw_idx,
+                )
+            )
+            # A contraction spans several normalized tokens but one raw word;
+            # list it once so "can't" is not reported twice.
+            if raw_idx >= 0 and any(e[0] == raw_idx for e in errors):
+                return
+            error_msg = trans_word if trans_word else "(missing)"
+            errors.append((raw_idx, orig_word, error_msg))
+            error_details.append(
+                {
+                    "orig_idx": raw_idx,
+                    "trans_idx": trans_raw_idx(trans_pos) if trans_word else None,
+                    "expected": orig_word,
+                    "got": error_msg,
+                }
+            )
+
         opcodes = matcher.get_opcodes()
 
         orig_pos = 0
@@ -312,23 +458,12 @@ class TextComparator:
         for tag, i1, i2, j1, j2 in opcodes:
             if tag == "equal":
                 for k in range(i2 - i1):
-                    orig_word = (
-                        original_words_raw[orig_pos]
-                        if orig_pos < len(original_words_raw)
-                        else ""
-                    )
-                    trans_word = (
-                        transcribed_words_raw[trans_pos]
-                        if trans_pos < len(transcribed_words_raw)
-                        else ""
-                    )
-
                     matches.append(
                         WordMatch(
-                            original=orig_word,
-                            transcribed=trans_word,
+                            original=orig_raw_word(orig_pos),
+                            transcribed=trans_raw_word(trans_pos),
                             is_match=True,
-                            index=orig_pos,
+                            index=orig_raw_idx(orig_pos),
                         )
                     )
                     correct_count += 1
@@ -341,98 +476,34 @@ class TextComparator:
 
                 for k in range(max(orig_segment_len, trans_segment_len)):
                     if k < orig_segment_len:
-                        orig_word = (
-                            original_words_raw[orig_pos]
-                            if orig_pos < len(original_words_raw)
-                            else ""
-                        )
-                        trans_word = (
-                            transcribed_words_raw[trans_pos]
-                            if k < trans_segment_len
-                            and trans_pos < len(transcribed_words_raw)
-                            else ""
-                        )
-
-                        orig_error_indices.add(orig_pos)
-
-                        if trans_word:
-                            trans_error_indices.add(trans_pos)
-
-                        error_msg = trans_word if trans_word else "(missing)"
-                        errors.append((orig_pos, orig_word, error_msg))
-                        error_details.append(
-                            {
-                                "orig_idx": orig_pos,
-                                "trans_idx": trans_pos if trans_word else None,
-                                "expected": orig_word,
-                                "got": error_msg,
-                            }
-                        )
-
-                        matches.append(
-                            WordMatch(
-                                original=orig_word,
-                                transcribed=trans_word,
-                                is_match=False,
-                                index=orig_pos,
-                            )
-                        )
+                        has_trans = k < trans_segment_len
+                        record_error(orig_pos, trans_pos, has_trans)
                         orig_pos += 1
 
                     if k < trans_segment_len:
                         if k >= orig_segment_len:
-                            trans_word = (
-                                transcribed_words_raw[trans_pos]
-                                if trans_pos < len(transcribed_words_raw)
-                                else ""
-                            )
-                            trans_error_indices.add(trans_pos)
+                            t_idx = trans_raw_idx(trans_pos)
+                            if t_idx >= 0:
+                                trans_error_indices.add(t_idx)
                         trans_pos += 1
 
             elif tag == "delete":
                 for k in range(i1, i2):
-                    orig_word = (
-                        original_words_raw[orig_pos]
-                        if orig_pos < len(original_words_raw)
-                        else ""
-                    )
-
-                    orig_error_indices.add(orig_pos)
-                    errors.append((orig_pos, orig_word, "(missing)"))
-                    error_details.append(
-                        {
-                            "orig_idx": orig_pos,
-                            "trans_idx": None,
-                            "expected": orig_word,
-                            "got": "(missing)",
-                        }
-                    )
-
-                    matches.append(
-                        WordMatch(
-                            original=orig_word,
-                            transcribed="",
-                            is_match=False,
-                            index=orig_pos,
-                        )
-                    )
+                    record_error(orig_pos, trans_pos, has_trans=False)
                     orig_pos += 1
 
             elif tag == "insert":
                 for k in range(j1, j2):
-                    trans_word = (
-                        transcribed_words_raw[trans_pos]
-                        if trans_pos < len(transcribed_words_raw)
-                        else ""
-                    )
-                    trans_error_indices.add(trans_pos)
+                    t_idx = trans_raw_idx(trans_pos)
+                    if t_idx >= 0:
+                        trans_error_indices.add(t_idx)
                     trans_pos += 1
 
         total_count = len(original_normalized)
         accuracy = correct_count / total_count if total_count > 0 else 0.0
 
         missing_words = [orig for idx, orig, trans in errors if trans == "(missing)"]
-        extra_words = []
+        extra_words: list[str] = []
 
         return ComparisonResult(
             original_words=original_words_raw,
@@ -470,11 +541,17 @@ class TextComparator:
         Returns:
             ComparisonResult con análisis detallado
         """
-        original_words_raw = self.get_original_words(original)
-        transcribed_words_raw = self.get_original_words(transcribed)
-
-        original_normalized = self.normalize_text(original)
-        transcribed_normalized = self.normalize_text(transcribed)
+        # Aligned tokenization so raw display words and error indices line up
+        # with the normalized tokens the window search runs on (see
+        # _tokenize_aligned); without this, contractions drift the highlights.
+        original_words_raw, original_normalized, orig_to_raw = self._tokenize_aligned(
+            original
+        )
+        (
+            transcribed_words_raw,
+            transcribed_normalized,
+            trans_to_raw,
+        ) = self._tokenize_aligned(transcribed)
 
         matches: list[WordMatch] = []
         errors: list[tuple[int, str, str]] = []
@@ -486,13 +563,25 @@ class TextComparator:
         # Tracks which transcribed positions have been matched
         matched_trans_positions: set[int] = set()
 
+        # Anchor for the search window: the transcript position we expect the
+        # next original word around. It advances to one past each match, so it
+        # tracks reading progress instead of the original index. On a miss it
+        # stays put, keeping the window over the same region for the next word
+        # (handles runs of deletions without the anchor running ahead).
+        expected_pos = 0
+
         for orig_idx, orig_word in enumerate(original_normalized):
             found_pos = -1
 
-            search_start = max(0, orig_idx - window_size)
+            # Bounded window on both sides of the anchor. This is what keeps a
+            # word from matching an identical one far away in the transcript.
+            window_start = max(0, expected_pos - window_size)
+            window_end = min(
+                len(transcribed_normalized), expected_pos + window_size + 1
+            )
 
-            # 1. Buscar coincidencia exacta en la ventana
-            for trans_idx in range(search_start, len(transcribed_normalized)):
+            # 1. Exact match within the window.
+            for trans_idx in range(window_start, window_end):
                 if trans_idx in matched_trans_positions:
                     continue
 
@@ -501,8 +590,9 @@ class TextComparator:
                     matched_trans_positions.add(trans_idx)
                     break
 
+            # 2. Phonetic match within the same window (not the whole transcript).
             if found_pos < 0 and use_phonetic:
-                for trans_idx in range(len(transcribed_normalized)):
+                for trans_idx in range(window_start, window_end):
                     if trans_idx in matched_trans_positions:
                         continue
 
@@ -513,16 +603,21 @@ class TextComparator:
                         matched_trans_positions.add(trans_idx)
                         break
 
+            if found_pos >= 0:
+                expected_pos = found_pos + 1
+
+            orig_raw_idx = orig_to_raw[orig_idx] if orig_idx < len(orig_to_raw) else -1
             orig_word_raw = (
-                original_words_raw[orig_idx]
-                if orig_idx < len(original_words_raw)
-                else orig_word
+                original_words_raw[orig_raw_idx] if orig_raw_idx >= 0 else orig_word
             )
 
             if found_pos >= 0:
+                trans_raw_idx = (
+                    trans_to_raw[found_pos] if found_pos < len(trans_to_raw) else -1
+                )
                 trans_word_raw = (
-                    transcribed_words_raw[found_pos]
-                    if found_pos < len(transcribed_words_raw)
+                    transcribed_words_raw[trans_raw_idx]
+                    if trans_raw_idx >= 0
                     else transcribed_normalized[found_pos]
                 )
                 matches.append(
@@ -530,7 +625,7 @@ class TextComparator:
                         original=orig_word_raw,
                         transcribed=trans_word_raw,
                         is_match=True,
-                        index=orig_idx,
+                        index=orig_raw_idx,
                     )
                 )
                 correct_count += 1
@@ -540,32 +635,41 @@ class TextComparator:
                         original=orig_word_raw,
                         transcribed="",
                         is_match=False,
-                        index=orig_idx,
+                        index=orig_raw_idx,
                     )
                 )
-                orig_error_indices.add(orig_idx)
-                errors.append((orig_idx, orig_word_raw, "(missing)"))
-                error_details.append(
-                    {
-                        "orig_idx": orig_idx,
-                        "trans_idx": None,
-                        "expected": orig_word_raw,
-                        "got": "(missing)",
-                        "method": "flexible_window",
-                    }
-                )
+                if orig_raw_idx >= 0:
+                    orig_error_indices.add(orig_raw_idx)
+                # One raw word can span several normalized tokens; list it once.
+                if orig_raw_idx < 0 or not any(e[0] == orig_raw_idx for e in errors):
+                    errors.append((orig_raw_idx, orig_word_raw, "(missing)"))
+                    error_details.append(
+                        {
+                            "orig_idx": orig_raw_idx,
+                            "trans_idx": None,
+                            "expected": orig_word_raw,
+                            "got": "(missing)",
+                            "method": "flexible_window",
+                        }
+                    )
 
-        # Identificar palabras extra (en transcripción pero no matched)
-        extra_words = []
+        # Extra words: transcribed raw words with no matched normalized token.
+        extra_words: list[str] = []
+        seen_extra_raw: set[int] = set()
         for trans_idx, trans_word in enumerate(transcribed_normalized):
-            if trans_idx not in matched_trans_positions:
-                trans_word_raw = (
-                    transcribed_words_raw[trans_idx]
-                    if trans_idx < len(transcribed_words_raw)
-                    else trans_word
-                )
-                extra_words.append(trans_word_raw)
-                trans_error_indices.add(trans_idx)
+            if trans_idx in matched_trans_positions:
+                continue
+            trans_raw_idx = (
+                trans_to_raw[trans_idx] if trans_idx < len(trans_to_raw) else -1
+            )
+            if trans_raw_idx >= 0:
+                trans_error_indices.add(trans_raw_idx)
+                if trans_raw_idx in seen_extra_raw:
+                    continue
+                seen_extra_raw.add(trans_raw_idx)
+                extra_words.append(transcribed_words_raw[trans_raw_idx])
+            else:
+                extra_words.append(trans_word)
 
         total_count = len(original_normalized)
         accuracy = correct_count / total_count if total_count > 0 else 0.0
@@ -604,11 +708,16 @@ class TextComparator:
         Returns:
             ComparisonResult con análisis detallado
         """
-        original_words_raw = self.get_original_words(original)
-        transcribed_words_raw = self.get_original_words(transcribed)
-
-        original_normalized = self.normalize_text(original)
-        transcribed_normalized = self.normalize_text(transcribed)
+        # Aligned tokenization keeps raw display words and error indices in
+        # sync with the normalized tokens (see _tokenize_aligned).
+        original_words_raw, original_normalized, orig_to_raw = self._tokenize_aligned(
+            original
+        )
+        (
+            transcribed_words_raw,
+            transcribed_normalized,
+            trans_to_raw,
+        ) = self._tokenize_aligned(transcribed)
 
         matches: list[WordMatch] = []
         errors: list[tuple[int, str, str]] = []
@@ -620,12 +729,11 @@ class TextComparator:
         # Tracks which transcribed positions have been used
         used_trans_positions: set[int] = set()
 
-        # Para cada palabra original, buscar en cualquier posición
+        # For each original word, search any unused transcript position.
         for orig_idx, orig_word in enumerate(original_normalized):
+            orig_raw_idx = orig_to_raw[orig_idx] if orig_idx < len(orig_to_raw) else -1
             orig_word_raw = (
-                original_words_raw[orig_idx]
-                if orig_idx < len(original_words_raw)
-                else orig_word
+                original_words_raw[orig_raw_idx] if orig_raw_idx >= 0 else orig_word
             )
 
             # Buscar en cualquier posición no usada
@@ -645,9 +753,12 @@ class TextComparator:
                     break
 
             if found_pos >= 0:
+                trans_raw_idx = (
+                    trans_to_raw[found_pos] if found_pos < len(trans_to_raw) else -1
+                )
                 trans_word_raw = (
-                    transcribed_words_raw[found_pos]
-                    if found_pos < len(transcribed_words_raw)
+                    transcribed_words_raw[trans_raw_idx]
+                    if trans_raw_idx >= 0
                     else transcribed_normalized[found_pos]
                 )
                 matches.append(
@@ -655,7 +766,7 @@ class TextComparator:
                         original=orig_word_raw,
                         transcribed=trans_word_raw,
                         is_match=True,
-                        index=orig_idx,
+                        index=orig_raw_idx,
                     )
                 )
                 correct_count += 1
@@ -665,32 +776,40 @@ class TextComparator:
                         original=orig_word_raw,
                         transcribed="",
                         is_match=False,
-                        index=orig_idx,
+                        index=orig_raw_idx,
                     )
                 )
-                orig_error_indices.add(orig_idx)
-                errors.append((orig_idx, orig_word_raw, "(missing)"))
-                error_details.append(
-                    {
-                        "orig_idx": orig_idx,
-                        "trans_idx": None,
-                        "expected": orig_word_raw,
-                        "got": "(missing)",
-                        "method": "per_word",
-                    }
-                )
+                if orig_raw_idx >= 0:
+                    orig_error_indices.add(orig_raw_idx)
+                if orig_raw_idx < 0 or not any(e[0] == orig_raw_idx for e in errors):
+                    errors.append((orig_raw_idx, orig_word_raw, "(missing)"))
+                    error_details.append(
+                        {
+                            "orig_idx": orig_raw_idx,
+                            "trans_idx": None,
+                            "expected": orig_word_raw,
+                            "got": "(missing)",
+                            "method": "per_word",
+                        }
+                    )
 
-        # Palabras extra (en transcripción pero no usadas)
-        extra_words = []
+        # Extra words: transcribed raw words with no used normalized token.
+        extra_words: list[str] = []
+        seen_extra_raw: set[int] = set()
         for trans_idx, trans_word in enumerate(transcribed_normalized):
-            if trans_idx not in used_trans_positions:
-                trans_word_raw = (
-                    transcribed_words_raw[trans_idx]
-                    if trans_idx < len(transcribed_words_raw)
-                    else trans_word
-                )
-                extra_words.append(trans_word_raw)
-                trans_error_indices.add(trans_idx)
+            if trans_idx in used_trans_positions:
+                continue
+            trans_raw_idx = (
+                trans_to_raw[trans_idx] if trans_idx < len(trans_to_raw) else -1
+            )
+            if trans_raw_idx >= 0:
+                trans_error_indices.add(trans_raw_idx)
+                if trans_raw_idx in seen_extra_raw:
+                    continue
+                seen_extra_raw.add(trans_raw_idx)
+                extra_words.append(transcribed_words_raw[trans_raw_idx])
+            else:
+                extra_words.append(trans_word)
 
         total_count = len(original_normalized)
         accuracy = correct_count / total_count if total_count > 0 else 0.0
