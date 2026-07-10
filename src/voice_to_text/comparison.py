@@ -115,7 +115,7 @@ class ComparisonResult:
 class TextComparator:
     """Compares original text with transcription."""
 
-    # Grupos fonéticos: letras que suenan similar en inglés
+    # Phonetic groups: letters that sound similar in English
     PHONETIC_GROUPS = {
         "b": "B",
         "f": "F",
@@ -133,25 +133,25 @@ class TextComparator:
         "m": "M",
         "n": "N",
         "r": "R",
-        "l": "R",  # r y l son similares fonéticamente
+        "l": "R",  # r and l are phonetically similar
         "j": "J",
         "w": "W",
-        "h": "W",  # w y h son mudas o semivocales
+        "h": "W",  # w and h are silent or semivowels
     }
     VOWELS = set("aeiouy")
 
     @staticmethod
     def get_phonetic_code(word: str) -> str:
-        """Genera código fonético simplificado para una palabra.
+        """Generate a simplified phonetic code for a word.
 
-        Implementa un algoritmo similar a Soundex pero simplificado.
-        Las letras que suenan similar reciben el mismo código.
+        Implements a Soundex-like but simplified algorithm. Letters that
+        sound similar receive the same code.
 
         Args:
-            word: Palabra a convertir
+            word: Word to convert
 
         Returns:
-            Código fonético (letras mayúsculas representando sonidos)
+            Phonetic code (uppercase letters representing sounds)
         """
         if not word:
             return ""
@@ -165,8 +165,8 @@ class TextComparator:
 
         for i, char in enumerate(word):
             if char in TextComparator.VOWELS:
-                # Las vocales son importantes - las preservamos parcialmente
-                # pero no连续 dos vocales
+                # Vowels matter - preserve them partially, but do not emit
+                # two consecutive vowel markers
                 if not code.endswith("V"):
                     code += "V"
                 prev_phoneme = "V"
@@ -174,14 +174,14 @@ class TextComparator:
 
             if char in TextComparator.PHONETIC_GROUPS:
                 phoneme = TextComparator.PHONETIC_GROUPS[char]
-                # Solo añadir si es diferente del fonema anterior
+                # Only add it if it differs from the previous phoneme
                 if phoneme != prev_phoneme:
                     code += phoneme
                     prev_phoneme = phoneme
             else:
                 prev_phoneme = ""
 
-        # Eliminar duplicados consecutivos
+        # Remove consecutive duplicates
         result = ""
         prev = ""
         for c in code:
@@ -195,35 +195,35 @@ class TextComparator:
     def is_phonetic_match(
         word1: str, word2: str, exact_match_required: bool = False
     ) -> bool:
-        """Compara dos palabras fonéticamente.
+        """Compare two words phonetically.
 
         Args:
-            word1: Primera palabra
-            word2: Segunda palabra
-            exact_match_required: Si True, requiere coincidencia exacta además de fonética
+            word1: First word
+            word2: Second word
+            exact_match_required: If True, require an exact match in addition
+                to the phonetic one
 
         Returns:
-            True si las palabras coinciden exacta o fonéticamente
+            True if the words match exactly or phonetically
         """
         if not word1 or not word2:
             return False
 
-        # Coincidencia exacta (ignorando mayúsculas/minúsculas)
+        # Exact match (case-insensitive)
         if word1.lower() == word2.lower():
             return True
 
         if exact_match_required:
             return False
 
-        # Comparación fonética más flexible
+        # More flexible phonetic comparison
         code1 = TextComparator.get_phonetic_code(word1)
         code2 = TextComparator.get_phonetic_code(word2)
 
         if not code1 or not code2:
             return False
 
-        # Verificar si los códigos fonéticos son similares
-        # Usamos difflib para mayor flexibilidad
+        # Check whether the phonetic codes are similar; difflib gives some slack
         return difflib.SequenceMatcher(None, code1, code2).ratio() > 0.6
 
     @staticmethod
@@ -527,19 +527,19 @@ class TextComparator:
         window_size: int = 2,
         use_phonetic: bool = True,
     ) -> ComparisonResult:
-        """Compara texto con búsqueda flexible en ventana.
+        """Compare text with a flexible windowed search.
 
-        Para cada palabra del texto original, busca en un rango de posiciones
-        en la transcripción en lugar de requerir alineación estricta.
+        For each word in the original text, search a range of positions in the
+        transcription instead of requiring strict alignment.
 
         Args:
-            original: Texto original a comparar
-            transcribed: Texto transcrito
-            window_size: Tamaño de la ventana de búsqueda (±palabras)
-            use_phonetic: Usar coincidencia fonética además de exacta
+            original: Original text to compare against
+            transcribed: Transcribed text
+            window_size: Search window size (±words)
+            use_phonetic: Use phonetic matching in addition to exact matching
 
         Returns:
-            ComparisonResult con análisis detallado
+            ComparisonResult with detailed analysis
         """
         # Aligned tokenization so raw display words and error indices line up
         # with the normalized tokens the window search runs on (see
@@ -695,18 +695,18 @@ class TextComparator:
         transcribed: str,
         use_phonetic: bool = True,
     ) -> ComparisonResult:
-        """Compara palabra por palabra sin alineación secuencial.
+        """Compare word by word without sequential alignment.
 
-        Para cada palabra del texto original, verifica si existe en
-        cualquier posición de la transcripción. No requiere orden.
+        For each word in the original text, check whether it exists at any
+        position in the transcription. Order is not required.
 
         Args:
-            original: Texto original a comparar
-            transcribed: Texto transcrito
-            use_phonetic: Usar coincidencia fonética además de exacta
+            original: Original text to compare against
+            transcribed: Transcribed text
+            use_phonetic: Use phonetic matching in addition to exact matching
 
         Returns:
-            ComparisonResult con análisis detallado
+            ComparisonResult with detailed analysis
         """
         # Aligned tokenization keeps raw display words and error indices in
         # sync with the normalized tokens (see _tokenize_aligned).
@@ -736,13 +736,13 @@ class TextComparator:
                 original_words_raw[orig_raw_idx] if orig_raw_idx >= 0 else orig_word
             )
 
-            # Buscar en cualquier posición no usada
+            # Search any unused position
             found_pos = -1
             for trans_idx, trans_word in enumerate(transcribed_normalized):
                 if trans_idx in used_trans_positions:
                     continue
 
-                # Verificar coincidencia exacta o fonética
+                # Check for an exact or phonetic match
                 is_match = orig_word.lower() == trans_word.lower() or (
                     use_phonetic and self.is_phonetic_match(orig_word, trans_word)
                 )
