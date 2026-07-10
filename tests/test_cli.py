@@ -142,6 +142,24 @@ class TestCLI:
 
             mock_history.save.assert_called_once()
 
+    def test_cleanup_shuts_down_lesson_manager(
+        self, mock_config, mock_history, mock_lesson_manager
+    ):
+        """Cleanup stops the lesson preload executor so exit does not hang."""
+        with (
+            patch("voice_to_text.cli.Recorder"),
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+        ):
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._cleanup()
+
+            mock_lesson_manager.shutdown.assert_called_once()
+
     def test_cleanup_is_idempotent(self, mock_config, mock_history):
         """Calling cleanup twice saves history only once."""
         mock_history.get_entries = MagicMock(return_value=[{"text": "test"}])

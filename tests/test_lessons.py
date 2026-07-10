@@ -193,6 +193,25 @@ class TestLessonManager:
 
         assert manager._cache_dir == Path("/tmp/test")
 
+    def test_shutdown_releases_executor(self):
+        """shutdown() shuts the executor down without waiting."""
+        manager = LessonManager()
+        manager._executor = MagicMock()
+
+        manager.shutdown()
+
+        manager._executor.shutdown.assert_called_once_with(
+            wait=False, cancel_futures=True
+        )
+
+    def test_shutdown_prevents_new_preload(self):
+        """After shutdown the real executor rejects new work."""
+        manager = LessonManager()
+        manager.shutdown()
+
+        with pytest.raises(RuntimeError):
+            manager._executor.submit(lambda: None)
+
     def test_parse_homepage_valid_content(self):
         """Test parsing homepage with valid content."""
         manager = LessonManager()

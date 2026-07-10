@@ -82,6 +82,9 @@ class CLI:
         if self._cleaned_up:
             return
         self._cleaned_up = True
+        # Stop any background lesson download so its worker thread does not
+        # keep the interpreter alive at exit.
+        self.lesson_manager.shutdown()
         entries = self.history.get_entries()
         if entries:
             self.ui.console.print(
