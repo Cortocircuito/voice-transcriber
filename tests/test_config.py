@@ -17,6 +17,7 @@ class TestConfig:
         assert config.recording_device is None
         assert config.model_size == "base"
         assert config.words_per_minute == 150
+        assert config.comparison_method == "flexible"
 
     def test_validate_duration_valid(self):
         config = Config()
@@ -94,6 +95,22 @@ class TestConfigFile:
         assert config.language == "en"
         assert config.words_per_minute == 150
 
+    def test_load_from_file_comparison_method(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        with open(config_file, "w") as f:
+            json.dump({"comparison_method": "per_word"}, f)
+
+        config = Config.load_from_file(config_file)
+        assert config.comparison_method == "per_word"
+
+    def test_load_from_file_invalid_comparison_method(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        with open(config_file, "w") as f:
+            json.dump({"comparison_method": "bogus"}, f)
+
+        config = Config.load_from_file(config_file)
+        assert config.comparison_method == "flexible"
+
     def test_load_from_file_invalid_json(self, tmp_path):
         config_file = tmp_path / "config.json"
         config_file.write_text("invalid json")
@@ -118,3 +135,4 @@ class TestConfigFile:
         assert data["duration"] == 30
         assert data["language"] == "es"
         assert data["words_per_minute"] == 100
+        assert data["comparison_method"] == "flexible"

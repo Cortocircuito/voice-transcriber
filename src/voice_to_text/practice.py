@@ -15,7 +15,6 @@ from .recorder import Recorder
 from .transcriber import Transcriber
 from .ui import UI
 
-
 LESSONS_LOGGER = "voice_to_text.lessons"
 
 
@@ -316,7 +315,9 @@ class PracticeManager:
                 elif action == "s":
                     return "exit"
 
-        result = self.comparator.compare(text, transcribed)
+        result = self.comparator.compare_with_method(
+            text, transcribed, method=self.config.comparison_method
+        )
 
         self.ui.show_comparison(text, transcribed, result)
 

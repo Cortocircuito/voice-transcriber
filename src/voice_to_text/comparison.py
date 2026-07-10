@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .constants import COMPARISON_WINDOW_SIZE, DEFAULT_COMPARISON_METHOD
 
 CONTRACTIONS = {
     "i'm": "i am",
@@ -276,6 +277,44 @@ class TextComparator:
         """
         words = re.findall(r"\b[\w\'-]+\b", text)
         return words
+
+    def compare_with_method(
+        self,
+        original: str,
+        transcribed: str,
+        method: str = DEFAULT_COMPARISON_METHOD,
+        window_size: int = COMPARISON_WINDOW_SIZE,
+        use_phonetic: bool = True,
+    ) -> ComparisonResult:
+        """Compare using the named strategy.
+
+        Single dispatch point used by practice mode so the comparison
+        algorithm is selectable via ``Config.comparison_method``.
+
+        Args:
+            original: Original lesson text to compare against
+            transcribed: Transcribed text from speech
+            method: One of ``COMPARISON_METHODS`` ("flexible", "per_word",
+                "legacy"). Unknown values fall back to the flexible method.
+            window_size: Search window for the flexible method
+            use_phonetic: Allow phonetic matches in addition to exact ones
+
+        Returns:
+            ComparisonResult with detailed analysis
+        """
+        if method == "legacy":
+            return self.compare(original, transcribed)
+        if method == "per_word":
+            return self.compare_per_word(
+                original, transcribed, use_phonetic=use_phonetic
+            )
+        # "flexible" and any unknown value fall back to the flexible method.
+        return self.compare_flexible(
+            original,
+            transcribed,
+            window_size=window_size,
+            use_phonetic=use_phonetic,
+        )
 
     def compare(self, original: str, transcribed: str) -> ComparisonResult:
         """Compare original text with transcription.

@@ -280,9 +280,7 @@ class TestFlexibleComparison:
         comparator = TextComparator()
         # Palabra desplazada por una palabra extra
         result = comparator.compare_flexible(
-            "hello world test",
-            "hello there world test",
-            window_size=2
+            "hello world test", "hello there world test", window_size=2
         )
         # "world" y "test" deberían encontrarse
         assert result.accuracy == 1.0
@@ -291,10 +289,7 @@ class TestFlexibleComparison:
         """Test flexible comparison with phonetic matching."""
         comparator = TextComparator()
         result = comparator.compare_flexible(
-            "hello world",
-            "hi world",
-            window_size=2,
-            use_phonetic=True
+            "hello world", "hi world", window_size=2, use_phonetic=True
         )
         # "hello" y "hi" deberían coincidir fonéticamente
         assert result.accuracy == 1.0
@@ -321,8 +316,7 @@ class TestPerWordComparison:
         comparator = TextComparator()
         # Orden diferente
         result = comparator.compare_per_word(
-            "the cat sat on the mat",
-            "mat sat cat the on the"
+            "the cat sat on the mat", "mat sat cat the on the"
         )
         # Todas las palabras están presentes
         assert result.accuracy == 1.0
@@ -331,10 +325,7 @@ class TestPerWordComparison:
     def test_per_word_partial_match(self):
         """Test per-word comparison with partial match."""
         comparator = TextComparator()
-        result = comparator.compare_per_word(
-            "hello world",
-            "hello"
-        )
+        result = comparator.compare_per_word("hello world", "hello")
         assert result.accuracy == 0.5
         assert result.correct_count == 1
         assert "world" in result.missing_words
@@ -343,9 +334,7 @@ class TestPerWordComparison:
         """Test per-word comparison with phonetic matching."""
         comparator = TextComparator()
         result = comparator.compare_per_word(
-            "the cat sat",
-            "the cut sat",
-            use_phonetic=True
+            "the cat sat", "the cut sat", use_phonetic=True
         )
         # "cat" y "cut" deberían coincidir fonéticamente
         assert result.accuracy == 1.0
@@ -353,8 +342,53 @@ class TestPerWordComparison:
     def test_per_word_extra_words(self):
         """Test per-word comparison detects extra words."""
         comparator = TextComparator()
-        result = comparator.compare_per_word(
-            "hello world",
-            "hello world extra"
-        )
+        result = comparator.compare_per_word("hello world", "hello world extra")
         assert "extra" in result.extra_words
+
+
+class TestCompareWithMethod:
+    """Tests for the compare_with_method dispatcher used by practice mode."""
+
+    def test_dispatch_legacy(self):
+        """Legacy method routes to strict difflib alignment."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "hello world", "hello world", method="legacy"
+        )
+        assert result.accuracy == 1.0
+        assert result.correct_count == 2
+
+    def test_dispatch_per_word_ignores_order(self):
+        """Per-word method routes to order-independent matching."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "the cat sat", "sat the cat", method="per_word"
+        )
+        assert result.accuracy == 1.0
+
+    def test_dispatch_flexible_tolerates_offset(self):
+        """Flexible method routes to window search tolerant of offsets."""
+        comparator = TextComparator()
+        result = comparator.compare_with_method(
+            "hello world test", "hello there world test", method="flexible"
+        )
+        assert result.accuracy == 1.0
+
+    def test_dispatch_unknown_falls_back_to_flexible(self):
+        """Unknown method names fall back to the flexible strategy."""
+        comparator = TextComparator()
+        unknown = comparator.compare_with_method(
+            "hello world test", "hello there world test", method="bogus"
+        )
+        flexible = comparator.compare_flexible(
+            "hello world test", "hello there world test"
+        )
+        assert unknown.accuracy == flexible.accuracy
+        assert unknown.correct_count == flexible.correct_count
+
+    def test_dispatch_default_is_flexible(self):
+        """Default method matches the flexible strategy."""
+        comparator = TextComparator()
+        default = comparator.compare_with_method("the cat sat", "the the cat sat")
+        flexible = comparator.compare_flexible("the cat sat", "the the cat sat")
+        assert default.accuracy == flexible.accuracy
