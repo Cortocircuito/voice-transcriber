@@ -136,3 +136,92 @@ class TestConfigFile:
         assert data["language"] == "es"
         assert data["words_per_minute"] == 100
         assert data["comparison_method"] == "flexible"
+
+
+class TestConfigValidation:
+    """load_from_file sanitizes hand-edited / invalid values."""
+
+    def _write(self, tmp_path, data):
+        config_file = tmp_path / "config.json"
+        with open(config_file, "w") as f:
+            json.dump(data, f)
+        return config_file
+
+    def test_duration_out_of_range_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"duration": -5}))
+        assert cfg.duration == 15
+        cfg = Config.load_from_file(self._write(tmp_path, {"duration": 10000}))
+        assert cfg.duration == 15
+
+    def test_duration_wrong_type_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"duration": "abc"}))
+        assert cfg.duration == 15
+        # A JSON bool must not be silently coerced to 0/1.
+        cfg = Config.load_from_file(self._write(tmp_path, {"duration": True}))
+        assert cfg.duration == 15
+
+    def test_words_per_minute_out_of_range_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"words_per_minute": 5}))
+        assert cfg.words_per_minute == 150
+        cfg = Config.load_from_file(self._write(tmp_path, {"words_per_minute": 9999}))
+        assert cfg.words_per_minute == 150
+
+    def test_invalid_language_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"language": "xx"}))
+        assert cfg.language == "en"
+
+    def test_invalid_ui_language_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"ui_language": "fr"}))
+        assert cfg.ui_language == "en"
+
+    def test_invalid_model_size_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"model_size": "huge"}))
+        assert cfg.model_size == "base"
+
+    def test_valid_values_are_kept(self, tmp_path):
+        cfg = Config.load_from_file(
+            self._write(
+                tmp_path,
+                {
+                    "duration": 42,
+                    "words_per_minute": 200,
+                    "language": "fr",
+                    "ui_language": "es",
+                    "model_size": "small",
+                    "comparison_method": "per_word",
+                },
+            )
+        )
+        assert cfg.duration == 42
+        assert cfg.words_per_minute == 200
+        assert cfg.language == "fr"
+        assert cfg.ui_language == "es"
+        assert cfg.model_size == "small"
+        assert cfg.comparison_method == "per_word"
+
+    def test_recording_device_string_kept_none_kept(self, tmp_path):
+        cfg = Config.load_from_file(
+            self._write(tmp_path, {"recording_device": "hw:1,0"})
+        )
+        assert cfg.recording_device == "hw:1,0"
+        cfg = Config.load_from_file(self._write(tmp_path, {"recording_device": None}))
+        assert cfg.recording_device is None
+
+    def test_recording_device_wrong_type_uses_default(self, tmp_path):
+        cfg = Config.load_from_file(self._write(tmp_path, {"recording_device": 5}))
+        assert cfg.recording_device is None
+
+    def test_non_object_json_uses_defaults(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        with open(config_file, "w") as f:
+            json.dump([1, 2, 3], f)
+        cfg = Config.load_from_file(config_file)
+        assert cfg.duration == 15
+        assert cfg.language == "en"
+
+    def test_one_invalid_field_does_not_drop_valid_ones(self, tmp_path):
+        cfg = Config.load_from_file(
+            self._write(tmp_path, {"duration": -1, "language": "de"})
+        )
+        assert cfg.duration == 15  # invalid -> default
+        assert cfg.language == "de"  # valid -> kept
