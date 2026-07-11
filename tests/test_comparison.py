@@ -219,7 +219,7 @@ class TestPhoneticMatching:
     def test_phonetic_code_basic(self):
         """Test basic phonetic code generation."""
         comparator = TextComparator()
-        # Palabras que suenan diferente deberían tener códigos diferentes
+        # Words that sound different should have different codes
         code_cat = comparator.get_phonetic_code("cat")
         code_dog = comparator.get_phonetic_code("dog")
         assert code_cat != code_dog
@@ -227,7 +227,7 @@ class TestPhoneticMatching:
     def test_phonetic_code_similar_sounds(self):
         """Test that similar sounding words have same or similar codes."""
         comparator = TextComparator()
-        # cat y cut suenan similar
+        # cat and cut sound similar
         code_cat = comparator.get_phonetic_code("cat")
         code_cut = comparator.get_phonetic_code("cut")
         assert code_cat == code_cut
@@ -267,20 +267,20 @@ class TestFlexibleComparison:
     def test_flexible_word_duplication(self):
         """Test flexible comparison handles word duplication."""
         comparator = TextComparator()
-        # Usuario dice "the the" en vez de "the"
+        # User says "the the" instead of "the"
         result = comparator.compare_flexible("the cat sat", "the the cat sat")
-        # Debería encontrar todas las palabras
+        # Should find all the words
         assert result.accuracy == 1.0
         assert result.correct_count == 3
 
     def test_flexible_word_offset(self):
         """Test flexible comparison handles word offset."""
         comparator = TextComparator()
-        # Palabra desplazada por una palabra extra
+        # Word shifted by an extra word
         result = comparator.compare_flexible(
             "hello world test", "hello there world test", window_size=2
         )
-        # "world" y "test" deberían encontrarse
+        # "world" and "test" should be found
         assert result.accuracy == 1.0
 
     def test_flexible_with_phonetic(self):
@@ -289,7 +289,7 @@ class TestFlexibleComparison:
         result = comparator.compare_flexible(
             "hello world", "hi world", window_size=2, use_phonetic=True
         )
-        # "hello" y "hi" deberían coincidir fonéticamente
+        # "hello" and "hi" should match phonetically
         assert result.accuracy == 1.0
 
     def test_flexible_missing_word(self):
@@ -371,11 +371,11 @@ class TestPerWordComparison:
     def test_per_word_different_order(self):
         """Test per-word comparison with different word order."""
         comparator = TextComparator()
-        # Orden diferente
+        # Different order
         result = comparator.compare_per_word(
             "the cat sat on the mat", "mat sat cat the on the"
         )
-        # Todas las palabras están presentes
+        # All the words are present
         assert result.accuracy == 1.0
         assert result.correct_count == 6
 
@@ -393,7 +393,7 @@ class TestPerWordComparison:
         result = comparator.compare_per_word(
             "the cat sat", "the cut sat", use_phonetic=True
         )
-        # "cat" y "cut" deberían coincidir fonéticamente
+        # "cat" and "cut" should match phonetically
         assert result.accuracy == 1.0
 
     def test_per_word_extra_words(self):

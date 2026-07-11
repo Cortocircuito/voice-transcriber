@@ -5,14 +5,16 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple, cast
 
 from .constants import (
     COMPARISON_METHODS,
     CONFIG_FILE_NAME,
     DEFAULT_COMPARISON_METHOD as CONSTANTS_DEFAULT_COMPARISON_METHOD,
     MAX_DURATION as CONSTANTS_MAX_DURATION,
+    MAX_READING_SPEED,
     MIN_DURATION as CONSTANTS_MIN_DURATION,
+    MIN_READING_SPEED,
     WORDS_PER_MINUTE,
     WORDS_PER_PAGE_MAX,
     WORDS_PER_PAGE_MIN,
@@ -47,6 +49,11 @@ SUPPORTED_MODELS: Dict[str, Tuple[str, str]] = {
     "3": ("small", "≈500MB"),
     "4": ("medium", "≈1.5GB"),
 }
+
+# Valid values used to sanitize a hand-edited config.json on load.
+SUPPORTED_LANGUAGE_CODES = {code for code, _ in SUPPORTED_LANGUAGES.values()}
+SUPPORTED_MODEL_SIZES = {model for model, _ in SUPPORTED_MODELS.values()}
+SUPPORTED_UI_LANGUAGES = {"en", "es"}
 
 DEFAULT_DURATION = 15
 DEFAULT_LANGUAGE = "en"
@@ -97,15 +104,59 @@ class Config:
                 return f"{model} ({size})"
         return self.model_size
 
+    @staticmethod
+    def _valid_int(data: dict, key: str, lo: int, hi: int, default: int) -> int:
+        """Return data[key] as an int in [lo, hi], else the default.
+
+        Absent keys silently use the default; a present-but-invalid value
+        (wrong type, out of range) falls back to the default with a warning so
+        a hand-edited config.json cannot inject a bad value downstream.
+        """
+        if key not in data:
+            return default
+        value = data[key]
+        if isinstance(value, bool):
+            coerced = None
+        else:
+            try:
+                coerced = int(value)
+            except (TypeError, ValueError):
+                coerced = None
+        if coerced is not None and lo <= coerced <= hi:
+            return coerced
+        logger.warning(
+            "Invalid '%s' in config (%r); using default %r", key, value, default
+        )
+        return default
+
+    @staticmethod
+    def _valid_choice(
+        data: dict, key: str, choices: Iterable[str], default: str
+    ) -> str:
+        """Return data[key] if it is one of choices, else the default."""
+        if key not in data:
+            return default
+        value = data[key]
+        if value in choices:
+            return cast(str, value)
+        logger.warning(
+            "Invalid '%s' in config (%r); using default %r", key, value, default
+        )
+        return default
+
     @classmethod
     def load_from_file(cls, path: Optional[Path] = None) -> "Config":
         """Load config from JSON file.
+
+        Values are validated field by field; anything missing or invalid
+        (e.g. a hand-edited ``"model_size": "huge"`` or a negative duration)
+        falls back to the default rather than propagating downstream.
 
         Args:
             path: Path to config file. If None, uses default location.
 
         Returns:
-            Config instance with loaded values.
+            Config instance with loaded, sanitized values.
         """
         if path is None:
             path = get_config_file_path()
@@ -117,21 +168,44 @@ class Config:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
+            if not isinstance(data, dict):
+                logger.warning(
+                    "Config at %s is not a JSON object; using defaults", path
+                )
+                return cls()
+
             config = cls()
-            if "duration" in data:
-                config.duration = data["duration"]
-            if "language" in data:
-                config.language = data["language"]
-            if "ui_language" in data:
-                config.ui_language = data["ui_language"]
+            config.duration = cls._valid_int(
+                data, "duration", MIN_DURATION, MAX_DURATION, DEFAULT_DURATION
+            )
+            config.words_per_minute = cls._valid_int(
+                data,
+                "words_per_minute",
+                MIN_READING_SPEED,
+                MAX_READING_SPEED,
+                DEFAULT_READING_SPEED,
+            )
+            config.language = cls._valid_choice(
+                data, "language", SUPPORTED_LANGUAGE_CODES, DEFAULT_LANGUAGE
+            )
+            config.ui_language = cls._valid_choice(
+                data, "ui_language", SUPPORTED_UI_LANGUAGES, DEFAULT_UI_LANGUAGE
+            )
+            config.model_size = cls._valid_choice(
+                data, "model_size", SUPPORTED_MODEL_SIZES, DEFAULT_MODEL_SIZE
+            )
+            config.comparison_method = cls._valid_choice(
+                data, "comparison_method", COMPARISON_METHODS, DEFAULT_COMPARISON_METHOD
+            )
             if "recording_device" in data:
-                config.recording_device = data["recording_device"]
-            if "model_size" in data:
-                config.model_size = data["model_size"]
-            if "words_per_minute" in data:
-                config.words_per_minute = data["words_per_minute"]
-            if data.get("comparison_method") in COMPARISON_METHODS:
-                config.comparison_method = data["comparison_method"]
+                device = data["recording_device"]
+                if device is None or isinstance(device, str):
+                    config.recording_device = device
+                else:
+                    logger.warning(
+                        "Invalid 'recording_device' in config (%r); using default",
+                        device,
+                    )
 
             return config
         except (json.JSONDecodeError, IOError) as e:

@@ -105,6 +105,15 @@ TRANSLATIONS = {
     "missing_words": "Missing Words (skipped)",
     "copy_original": "Copy original",
     "copied": "Copied!",
+    "model_loaded": "Model loaded successfully",
+    "audio_not_found": "Audio file not found",
+    "audio_empty": "Audio file is empty",
+    "disk_space_error": "Not enough disk space to load model",
+    "model_cache_permission_error": "Permission denied accessing model cache",
+    "transcription_os_error": "OS error during transcription",
+    "transcribe_error": "Error transcribing",
+    "error_label": "Error",
+    "and_more": "and {n} more",
 }
 
 

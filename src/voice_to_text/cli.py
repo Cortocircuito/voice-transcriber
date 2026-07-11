@@ -37,8 +37,10 @@ class CLI:
         self.config = config or Config()
         self._cleaned_up = False
         self.recorder = Recorder(self.config.recording_device)
-        self.transcriber = Transcriber(model_size=self.config.model_size)
         self.ui = UI(self.config)
+        self.transcriber = Transcriber(
+            model_size=self.config.model_size, console=self.ui.console
+        )
         self.history = HistoryManager()
         self.lesson_manager = LessonManager()
 

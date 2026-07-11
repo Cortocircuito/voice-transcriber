@@ -246,6 +246,18 @@ class TestTranscriber:
         assert transcriber.device == "cuda"
         assert transcriber.compute_type == "float16"
 
+    def test_injected_console_used_for_errors(self):
+        """An injected console (not the module default) receives error output."""
+        mock_console = MagicMock()
+        transcriber = Transcriber(console=mock_console)
+        config = Config(language="en")
+
+        # Missing audio file takes the early error path.
+        success, text = transcriber.transcribe_streaming("/nope/missing.wav", config)
+
+        assert success is False
+        mock_console.print.assert_called_once()
+
     @patch("voice_to_text.transcriber.WhisperModel")
     def test_model_lazy_loading(self, mock_whisper):
         mock_model = MagicMock()
