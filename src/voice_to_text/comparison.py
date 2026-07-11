@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .constants import COMPARISON_WINDOW_SIZE, DEFAULT_COMPARISON_METHOD
+from .i18n import get_text
 
 CONTRACTIONS = {
     "i'm": "i am",
@@ -845,15 +846,18 @@ class TextComparator:
 
         if result.errors:
             lines.append("")
-            lines.append("  ❌ Mispronounced words:")
+            lines.append(f"  ❌ {get_text('mispronounced', ui_language)}:")
             for idx, orig, trans in result.errors[:10]:
                 if trans == "(missing)":
-                    lines.append(f'    • "{orig}" - missed')
+                    lines.append(f'    • "{orig}" - {get_text("missed", ui_language)}')
                 else:
                     lines.append(f'    • "{orig}" → "{trans}"')
 
             if len(result.errors) > 10:
-                lines.append(f"    ... and {len(result.errors) - 10} more")
+                extra = len(result.errors) - 10
+                lines.append(
+                    f"    ... {get_text('and_more', ui_language).format(n=extra)}"
+                )
             lines.append("")
 
         return "\n".join(lines)

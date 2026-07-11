@@ -10,8 +10,11 @@ from faster_whisper import WhisperModel
 
 from .config import Config
 from .constants import COLOR_ACCENT, COLOR_DIM, COLOR_ERROR, COLOR_SUCCESS
+from .i18n import get_text
 
-console = Console()
+# Fallback console used when no console is injected (e.g. in tests). The CLI
+# passes the shared UI console so output honors quiet mode and Rich settings.
+_default_console = Console()
 
 
 class TranscriberError(Exception):
@@ -44,11 +47,19 @@ class Transcriber:
         model_size: Optional[str] = None,
         device: str = "cpu",
         compute_type: str = "int8",
+        console: Optional[Console] = None,
     ):
         self._model_size = model_size
         self.device = device
         self.compute_type = compute_type
         self._model: Optional[WhisperModel] = None
+        self.console = console or _default_console
+
+    def _print_error(self, message: str) -> None:
+        """Print an error line to the injected console, prefixed and styled."""
+        self.console.print(
+            f"[{COLOR_ERROR}]{get_text('error_label')}: {message}[/{COLOR_ERROR}]"
+        )
 
     @property
     def model_size(self) -> str:
@@ -60,10 +71,10 @@ class Transcriber:
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console,
+                console=self.console,
             ) as progress:
                 progress.add_task(
-                    f"[{COLOR_ACCENT}]Loading Whisper model ({self.model_size})...",
+                    f"[{COLOR_ACCENT}]{get_text('loading_model')} ({self.model_size})",
                     total=None,
                 )
                 try:
@@ -85,8 +96,9 @@ class Transcriber:
                     raise ModelLoadError(f"Failed to load model: {e}") from e
                 except Exception as e:
                     raise ModelLoadError(f"Failed to load Whisper model: {e}") from e
-            console.print(
-                f"[{COLOR_SUCCESS}]✓[/{COLOR_SUCCESS}] [{COLOR_DIM}]Model loaded successfully[/{COLOR_DIM}]"
+            self.console.print(
+                f"[{COLOR_SUCCESS}]✓[/{COLOR_SUCCESS}] "
+                f"[{COLOR_DIM}]{get_text('model_loaded')}[/{COLOR_DIM}]"
             )
         return self._model
 
@@ -110,12 +122,14 @@ class Transcriber:
         Returns:
             Tuple of (success, full_text)
         """
+        lang = config.ui_language
+
         if not os.path.exists(audio_path):
-            console.print(f"[{COLOR_ERROR}]Error: Audio file not found[/{COLOR_ERROR}]")
+            self._print_error(get_text("audio_not_found", lang))
             return False, ""
 
         if not os.path.getsize(audio_path) > 0:
-            console.print(f"[{COLOR_ERROR}]Error: Audio file is empty[/{COLOR_ERROR}]")
+            self._print_error(get_text("audio_empty", lang))
             return False, ""
 
         try:
@@ -137,20 +151,14 @@ class Transcriber:
             return False, ""
         except OSError as e:
             if "No space left" in str(e):
-                console.print(
-                    f"[{COLOR_ERROR}]Error: Not enough disk space to load model[/{COLOR_ERROR}]"
-                )
+                self._print_error(get_text("disk_space_error", lang))
             elif "Permission denied" in str(e):
-                console.print(
-                    f"[{COLOR_ERROR}]Error: Permission denied accessing model cache[/{COLOR_ERROR}]"
-                )
+                self._print_error(get_text("model_cache_permission_error", lang))
             else:
-                console.print(
-                    f"[{COLOR_ERROR}]Error: OS error during transcription: {e}[/{COLOR_ERROR}]"
-                )
+                self._print_error(f"{get_text('transcription_os_error', lang)}: {e}")
             return False, ""
         except Exception as e:
-            console.print(f"[{COLOR_ERROR}]Error transcribing: {e}[/{COLOR_ERROR}]")
+            self._print_error(f"{get_text('transcribe_error', lang)}: {e}")
             return False, ""
         finally:
             try:
