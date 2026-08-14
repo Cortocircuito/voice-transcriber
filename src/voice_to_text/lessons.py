@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://breakingnewsenglish.com"
 
+# The lesson pages append a bibliographic reference after the article, followed
+# by exercises and other site content. The reference is not part of the text to
+# practise reading aloud.
+BIBLIOGRAPHIC_CITATION_PATTERN = re.compile(
+    r"\b[A-Z][A-Za-z'-]+,\s*(?:[A-Z]\.\s*)+"
+    r"(?:(?:and|&)\s+[A-Z][A-Za-z'-]+,\s*(?:[A-Z]\.\s*)+)?"
+    r"\(\d{4}[a-z]?\)"
+)
+
 
 class LessonError(Exception):
     """Base exception for lesson errors."""
@@ -277,14 +286,31 @@ class LessonManager:
         for line in lines:
             line = line.strip()
 
-            if line.startswith("#") or line.startswith("[") or line.startswith("*"):
+            if line.startswith("#") or line.startswith("["):
                 continue
 
             line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
             line = re.sub(r"[\*\_]{2,}", "", line)
             line = re.sub(r"\s+", " ", line).strip()
 
+            line_without_tail = self._strip_bibliographic_tail(line)
+            has_bibliographic_tail = line_without_tail != line
+            line = line_without_tail
+
+            if not line:
+                if has_bibliographic_tail:
+                    break
+                continue
+
+            if line.startswith("*"):
+                if has_bibliographic_tail:
+                    break
+                continue
+
             if len(line) < 80:
+                if has_bibliographic_tail:
+                    text_blocks.append(line)
+                    break
                 continue
 
             text_lower = line.lower()
@@ -304,16 +330,27 @@ class LessonManager:
 
             normalized = " ".join(line.split()[:10])
             if normalized in seen_texts:
+                if has_bibliographic_tail:
+                    break
                 continue
             seen_texts.add(normalized)
 
             text_blocks.append(line)
+            if has_bibliographic_tail:
+                break
 
         if text_blocks:
             combined = " ".join(text_blocks[:8])
-            return combined
+            return self._strip_bibliographic_tail(combined)
 
         return ""
+
+    def _strip_bibliographic_tail(self, text: str) -> str:
+        """Remove a bibliography entry and all following non-article content."""
+        match = BIBLIOGRAPHIC_CITATION_PATTERN.search(text)
+        if not match:
+            return text
+        return text[: match.start()].rstrip()
 
     def _extract_paragraphs(self, content: str) -> list[str]:
         """Extract paragraphs from the article content.
@@ -366,6 +403,12 @@ class LessonManager:
                 "litespeed web server",
                 "copyright",
             ]
+            text_without_tail = self._strip_bibliographic_tail(text)
+            if text_without_tail != text:
+                if text_without_tail:
+                    paragraphs.append(text_without_tail)
+                break
+
             text_lower = text.lower()
             if any(skip in text_lower for skip in skip_patterns):
                 continue
@@ -379,6 +422,27 @@ class LessonManager:
                 paragraphs = [p.strip() for p in paras if len(p.strip()) > 20]
 
         return paragraphs
+
+    def _clean_cached_lesson(self, lesson: Lesson) -> Lesson:
+        """Remove bibliography tails from a lesson saved by an earlier version."""
+        lesson.texts = {
+            level: self._strip_bibliographic_tail(text)
+            for level, text in lesson.texts.items()
+        }
+
+        cleaned_paragraphs: dict[str, list[str]] = {}
+        for level, paragraphs in lesson.paragraphs.items():
+            cleaned: list[str] = []
+            for paragraph in paragraphs:
+                paragraph_without_tail = self._strip_bibliographic_tail(paragraph)
+                if paragraph_without_tail:
+                    cleaned.append(paragraph_without_tail)
+                if paragraph_without_tail != paragraph:
+                    break
+            cleaned_paragraphs[level] = cleaned
+        lesson.paragraphs = cleaned_paragraphs
+
+        return lesson
 
     def _get_level_from_url(self, url: str) -> str:
         """Extract level from URL.
@@ -578,7 +642,7 @@ class LessonManager:
 
             lessons = []
             for item in data.get("lessons", []):
-                lesson = Lesson.from_dict(item)
+                lesson = self._clean_cached_lesson(Lesson.from_dict(item))
                 lessons.append(lesson)
                 self._cache[lesson.url] = lesson
 
@@ -625,7 +689,7 @@ class LessonManager:
                 data = json.load(f)
             lessons = []
             for item in data.get("lessons", []):
-                lesson = Lesson.from_dict(item)
+                lesson = self._clean_cached_lesson(Lesson.from_dict(item))
                 lessons.append(lesson)
                 self._cache[lesson.url] = lesson
             return lessons
