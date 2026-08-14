@@ -224,6 +224,11 @@ class TextComparator:
         if not code1 or not code2:
             return False
 
+        # A short code can be a prefix of a longer word's code even when the
+        # words are not close pronunciations (for example, "heatwaves"/"hit").
+        if min(len(code1), len(code2)) / max(len(code1), len(code2)) < 2 / 3:
+            return False
+
         # Check whether the phonetic codes are similar; difflib gives some slack
         return difflib.SequenceMatcher(None, code1, code2).ratio() > 0.6
 

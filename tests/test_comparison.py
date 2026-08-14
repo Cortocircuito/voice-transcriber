@@ -237,10 +237,10 @@ class TestPhoneticMatching:
         comparator = TextComparator()
         assert comparator.is_phonetic_match("cat", "cut") is True
 
-    def test_phonetic_match_hello_hi(self):
-        """Test phonetic matching for hello/hi."""
+    def test_phonetic_match_rejects_incomplete_word(self):
+        """A short partial code cannot match a much longer word."""
         comparator = TextComparator()
-        assert comparator.is_phonetic_match("hello", "hi") is True
+        assert comparator.is_phonetic_match("heatwaves", "hit") is False
 
     def test_phonetic_match_case_insensitive(self):
         """Test phonetic matching is case insensitive."""
@@ -287,10 +287,28 @@ class TestFlexibleComparison:
         """Test flexible comparison with phonetic matching."""
         comparator = TextComparator()
         result = comparator.compare_flexible(
-            "hello world", "hi world", window_size=2, use_phonetic=True
+            "cat world", "cut world", window_size=2, use_phonetic=True
         )
-        # "hello" and "hi" should match phonetically
+        # "cat" and "cut" should match phonetically.
         assert result.accuracy == 1.0
+
+    def test_flexible_rejects_partial_phonetic_word_matches(self):
+        """Split or shortened words are reported as missing, not correct."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            (
+                "Extreme heat and wildfires are becoming more common Europe is "
+                "experiencing record-breaking temperatures and heatwaves"
+            ),
+            (
+                "A string hit and well fires are becoming more common Europe is "
+                "experiencing record-breaking temperatures and hit waves"
+            ),
+        )
+
+        assert result.correct_count == 13
+        assert result.missing_words == ["Extreme", "wildfires", "heatwaves"]
+        assert result.extra_words == ["A", "string", "well", "fires", "hit", "waves"]
 
     def test_flexible_missing_word(self):
         """Test flexible comparison detects missing words."""
