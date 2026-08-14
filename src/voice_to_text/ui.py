@@ -919,20 +919,18 @@ class UI:
                 word + " ", "bold red" if i in trans_error_indices else ""
             )
 
-        transcribed_count = len(transcribed.split()) if transcribed else 0
-
-        mispronounced_words: list[tuple[str, str]] = []
-        missing_in_middle: list[tuple[str, str]] = []
+        mispronounced_words: list[tuple[int, str]] = []
+        missing_words = list(getattr(result, "missing_words", []))
+        extra_words = list(getattr(result, "extra_words", []))
 
         if hasattr(result, "errors"):
             for orig_pos, orig_word, error_msg in result.errors:
                 if error_msg != "(missing)":
                     mispronounced_words.append((orig_pos, orig_word))
-                elif orig_pos < transcribed_count:
-                    missing_in_middle.append((orig_pos, orig_word))
+                elif orig_word not in missing_words:
+                    missing_words.append(orig_word)
 
         mispronounced_words.sort(key=lambda x: x[0])
-        missing_in_middle.sort(key=lambda x: x[0])
 
         mispronounced_text = Text()
         if mispronounced_words:
@@ -950,17 +948,24 @@ class UI:
                     )
 
         missing_text = Text()
-        if missing_in_middle:
+        if missing_words:
             missing_text.append(
                 f"\n  {get_text('missing_words', lang)}:\n\n", style="bold yellow"
             )
-            word_list = [w for _, w in missing_in_middle]
-            phonetics = get_words_phonetics(word_list)
+            phonetics = get_words_phonetics(missing_words)
             for word, ipa in phonetics:
                 if ipa:
                     missing_text.append(f"  {word}  →  /{ipa}/\n", style="yellow")
                 else:
                     missing_text.append(f"  {word}  →  (IPA not found)\n", style="dim")
+
+        extra_text = Text()
+        if extra_words:
+            extra_text.append(
+                f"\n  {get_text('extra_words', lang)}:\n\n", style="bold red"
+            )
+            for word in extra_words:
+                extra_text.append(f"  {word}\n", style="red")
 
         sep = Text("  " + "─" * 50, style="dim")
         accuracy_line = Text()
@@ -984,6 +989,7 @@ class UI:
             accuracy_line,
             mispronounced_text,
             missing_text,
+            extra_text,
         )
 
         self.console.print()

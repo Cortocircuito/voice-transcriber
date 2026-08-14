@@ -1,16 +1,21 @@
 """Tests for UI module."""
 
 import signal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from voice_to_text.ui import UI
 from voice_to_text.config import Config
+from voice_to_text.comparison import TextComparator
 
 
 class TestUI:
     """Tests for UI class."""
+
+    def _group_text(self, group):
+        """Return plain text from a Rich Group renderable."""
+        return "\n".join(str(renderable) for renderable in group.renderables)
 
     @pytest.fixture
     def mock_config(self):
@@ -293,3 +298,53 @@ class TestUI:
             result = ui.prompt_duration()
 
             assert result is None
+
+    def test_show_comparison_lists_missing_word_at_end(self, mock_config):
+        """Missing words at the end are shown in the result details."""
+        with (
+            patch("voice_to_text.ui.Console") as mock_console,
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.get_words_phonetics") as mock_phonetics,
+        ):
+            console_instance = MagicMock()
+            console_instance.width = 80
+            mock_console.return_value = console_instance
+            mock_phonetics.side_effect = lambda words: [(word, None) for word in words]
+
+            ui = UI(mock_config)
+            ui._create_panel = MagicMock(side_effect=lambda content, **kwargs: content)
+            result = TextComparator().compare_flexible(
+                "hello world", "hello", use_phonetic=False
+            )
+
+            ui.show_comparison("hello world", "hello", result)
+
+            group = console_instance.print.call_args_list[-1].args[0]
+            text = self._group_text(group)
+            assert "Missing Words" in text
+            assert "world" in text
+
+    def test_show_comparison_lists_extra_words(self, mock_config):
+        """Extra transcribed words are shown in the result details."""
+        with (
+            patch("voice_to_text.ui.Console") as mock_console,
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.get_words_phonetics") as mock_phonetics,
+        ):
+            console_instance = MagicMock()
+            console_instance.width = 80
+            mock_console.return_value = console_instance
+            mock_phonetics.side_effect = lambda words: [(word, None) for word in words]
+
+            ui = UI(mock_config)
+            ui._create_panel = MagicMock(side_effect=lambda content, **kwargs: content)
+            result = TextComparator().compare_flexible(
+                "hello world", "hello extra world", use_phonetic=False
+            )
+
+            ui.show_comparison("hello world", "hello extra world", result)
+
+            group = console_instance.print.call_args_list[-1].args[0]
+            text = self._group_text(group)
+            assert "Extra Words" in text
+            assert "extra" in text
