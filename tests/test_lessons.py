@@ -1,7 +1,6 @@
 """Tests for lessons module."""
 
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +11,6 @@ from voice_to_text.lessons import (
     LessonManager,
     LessonError,
     NetworkError,
-    get_lessons_cache_dir,
 )
 
 
@@ -428,6 +426,71 @@ class TestLessonErrors:
 
 class TestLessonLevelFiltering:
     """Tests for lesson level filtering logic."""
+
+    def test_extract_reading_text_stops_at_bibliographic_citation(self):
+        """Bibliographic references and following exercises are excluded."""
+        manager = LessonManager()
+        article = (
+            "Scientists say the photos will help us predict space weather one day. "
+            "The images also show details that could help researchers understand "
+            "the Sun's energy."
+        )
+        content = f"""# Test Title
+
+{article}
+
+Haas, M. and Laughlin, M. (2000) Teaching Current Events: It's Status in Social Studies Today.
+
+Scientists (1) ______________________________ to take the best-ever photos of the Sun.
+"""
+
+        text = manager._extract_reading_text(content)
+
+        assert text == article
+        assert "Haas" not in text
+        assert "(1)" not in text
+
+    def test_strip_bibliographic_tail_supports_different_authors(self):
+        """The filter must not be tied to one fixed reference."""
+        manager = LessonManager()
+        text = (
+            "The article ends here. Smith, J. and Patel, R. (2011) "
+            "An Unrelated Reference. Exercise content follows."
+        )
+
+        assert manager._strip_bibliographic_tail(text) == "The article ends here."
+
+    def test_load_cache_removes_bibliographic_tail(self, tmp_path):
+        """Existing cached lessons are cleaned before practice begins."""
+        manager = LessonManager()
+        manager._index_file = tmp_path / "index.json"
+        lesson = Lesson(
+            title="Test Lesson",
+            url="https://example.com/lesson.html",
+            date="",
+            description="",
+            levels=["3"],
+            texts={
+                "3": "Article text. Smith, J. and Patel, R. (2011) "
+                "An Unrelated Reference. Exercise content follows."
+            },
+            level_urls={"3": "https://example.com/lesson-3.html"},
+            paragraphs={
+                "3": [
+                    "Article text.",
+                    "Smith, J. and Patel, R. (2011) An Unrelated Reference.",
+                    "Exercise content follows.",
+                ]
+            },
+        )
+        manager._index_file.write_text(
+            json.dumps({"lessons": [lesson.to_dict()]}), encoding="utf-8"
+        )
+
+        cached_lesson = manager._load_cache()[0]
+
+        assert cached_lesson.get_text("3") == "Article text."
+        assert cached_lesson.get_paragraphs("3") == ["Article text."]
 
     def test_extract_reading_text_filters_litespeed_content(self):
         """Test that LiteSpeed placeholder content is filtered out."""
