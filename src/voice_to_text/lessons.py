@@ -4,11 +4,12 @@ import json
 import logging
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor, Future
-from dataclasses import dataclass, asdict
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, cast
+from urllib.parse import urljoin
 
 from scrapesome import sync_scraper
 
@@ -139,30 +140,27 @@ class LessonManager:
         lessons: list[dict[str, Any]] = []
         seen_urls: set[str] = set()
 
-        link_pattern = r"\[([^\]]+)\]\(([^)]+\.html)"
+        lesson_heading_pattern = re.compile(
+            r'^###\s+\[([^\]]+)\]\((\S+?\.html)(?:\s+"[^"]*")?\)\s*$',
+            re.MULTILINE,
+        )
+        level_link_pattern = re.compile(
+            r'\[Level\s*([0-6])\]\((\S+?\.html)(?:\s+"[^"]*")?\)',
+            re.IGNORECASE,
+        )
+        heading_matches = list(lesson_heading_pattern.finditer(content))
 
-        for match in re.finditer(link_pattern, content):
+        for index, match in enumerate(heading_matches):
             title = match.group(1).strip()
-            url = match.group(2).strip()
-
-            if not re.search(r"\d{6}-", url):
-                continue
-
-            if not url.startswith("http"):
-                if url.startswith("/"):
-                    full_url = BASE_URL + url
-                else:
-                    full_url = BASE_URL + "/" + url
-            else:
-                full_url = url
+            full_url = urljoin(f"{BASE_URL}/", match.group(2).strip())
 
             if full_url in seen_urls:
                 continue
 
-            date_match = re.search(r"/(\d{4})/(\d{2})(\d{2})-", full_url)
+            date_match = re.search(r"/(\d{2})(\d{2})(\d{2})-[^/]+\.html$", full_url)
             if date_match:
                 year, month, day = date_match.groups()
-                date_str = f"{day}/{month}/{year[2:]}"
+                date_str = f"{day}/{month}/{year}"
             else:
                 date_str = ""
 
@@ -173,23 +171,22 @@ class LessonManager:
                 continue
 
             level_urls: dict[str, str] = {}
-
-            level_match = re.search(r"Level\s*(\d+)", title)
-            if level_match:
+            section_end = (
+                heading_matches[index + 1].start()
+                if index + 1 < len(heading_matches)
+                else len(content)
+            )
+            section = content[match.end() : section_end]
+            for level_match in level_link_pattern.finditer(section):
                 level = level_match.group(1)
-                title = re.sub(r"\s*Level\s*\d+\s*$", "", title).strip()
-                level_urls[level] = full_url
-
-            url_base_match = re.search(r"(.+)\.html$", full_url)
-            if url_base_match:
-                url_base = url_base_match.group(1)
-                for level in range(7):
-                    if str(level) not in level_urls:
-                        level_url = f"{url_base}-{level}.html"
-                        level_urls[str(level)] = level_url
+                level_url = urljoin(f"{BASE_URL}/", level_match.group(2).strip())
+                suffixed_url = f"{full_url[:-5]}-{level}.html"
+                if level_url not in {full_url, suffixed_url}:
+                    continue
+                level_urls[level] = level_url
 
             if not level_urls:
-                level_urls = {"3": full_url}
+                continue
 
             seen_urls.add(full_url)
 

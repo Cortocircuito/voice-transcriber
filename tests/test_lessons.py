@@ -8,10 +8,12 @@ import pytest
 
 from voice_to_text.lessons import (
     Lesson,
-    LessonManager,
     LessonError,
+    LessonManager,
     NetworkError,
 )
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 class TestLesson:
@@ -211,65 +213,54 @@ class TestLessonManager:
             manager._executor.submit(lambda: None)
 
     def test_parse_homepage_valid_content(self):
-        """Test parsing homepage with valid content."""
+        """Parse the easier and harder level groups published by the site."""
         manager = LessonManager()
-
-        content = """# Breaking News English
-
-[Lesson Title](https://breakingnewsenglish.com/240101-test-lesson.html)
-"""
+        content = (FIXTURES_DIR / "breaking_news_homepage.md").read_text(
+            encoding="utf-8"
+        )
 
         lessons = manager._parse_homepage(content)
 
-        assert len(lessons) > 0
-        assert lessons[0]["title"] == "Lesson Title"
-
-    def test_parse_homepage_with_level_in_title(self):
-        """Test parsing homepage with level in title."""
-        manager = LessonManager()
-
-        content = """# Breaking News English
-
-[Test Lesson Level 2](https://breakingnewsenglish.com/240101-test-lesson.html)
-"""
-
-        lessons = manager._parse_homepage(content)
-
-        assert len(lessons) > 0
-        assert "Test Lesson" in lessons[0]["title"]
-        assert "2" in lessons[0]["level_urls"]
+        assert len(lessons) == 2
+        assert lessons[0]["title"] == (
+            "Australia bans AI songs from official music charts"
+        )
+        assert lessons[0]["date"] == "07/09/26"
+        assert lessons[0]["level_urls"] == {
+            "4": "https://breakingnewsenglish.com/2609/260907-ban-on-ai-songs-4.html",
+            "5": "https://breakingnewsenglish.com/2609/260907-ban-on-ai-songs-5.html",
+            "6": "https://breakingnewsenglish.com/2609/260907-ban-on-ai-songs.html",
+        }
+        assert lessons[1]["date"] == "03/09/26"
+        assert lessons[1]["level_urls"] == {
+            "0": "https://breakingnewsenglish.com/2609/260903-manga-theme-park-0.html",
+            "1": "https://breakingnewsenglish.com/2609/260903-manga-theme-park-1.html",
+            "2": "https://breakingnewsenglish.com/2609/260903-manga-theme-park-2.html",
+            "3": "https://breakingnewsenglish.com/2609/260903-manga-theme-park.html",
+        }
 
     def test_parse_homepage_extracts_date(self):
         """Test date extraction from URL."""
         manager = LessonManager()
 
-        content = """[Test Lesson](https://breakingnewsenglish.com/240101-test-lesson-0.html)"""
+        content = """### [A sufficiently long test lesson](2601/260115-test.html)
+
+* [Level 3](2601/260115-test.html)
+"""
 
         lessons = manager._parse_homepage(content)
 
-        assert len(lessons) > 0
-
-    def test_parse_homepage_generates_all_levels(self):
-        """Test that all levels (0-6) are generated."""
-        manager = LessonManager()
-
-        content = (
-            """[Test Lesson](https://breakingnewsenglish.com/240101-test-lesson.html)"""
-        )
-
-        lessons = manager._parse_homepage(content)
-
-        assert len(lessons) > 0
-        level_urls = lessons[0]["level_urls"]
-        assert "0" in level_urls
-        assert "3" in level_urls
-        assert "6" in level_urls
+        assert lessons[0]["date"] == "15/01/26"
+        assert set(lessons[0]["level_urls"]) == {"3"}
 
     def test_parse_homepage_skips_short_titles(self):
         """Test that short titles are skipped."""
         manager = LessonManager()
 
-        content = """[Short](https://breakingnewsenglish.com/240101-test-lesson.html)"""
+        content = """### [Short](2601/260115-test.html)
+
+* [Level 3](2601/260115-test.html)
+"""
 
         lessons = manager._parse_homepage(content)
 
@@ -279,8 +270,14 @@ class TestLessonManager:
         """Test that duplicate URLs are removed."""
         manager = LessonManager()
 
-        content = """[Test Lesson](https://breakingnewsenglish.com/240101-test-lesson.html)
-[Test Lesson 2](https://breakingnewsenglish.com/240101-test-lesson.html)"""
+        content = """### [A sufficiently long test lesson](2601/260115-test.html)
+
+* [Level 3](2601/260115-test.html)
+
+### [A duplicate test lesson title](2601/260115-test.html)
+
+* [Level 3](2601/260115-test.html)
+"""
 
         lessons = manager._parse_homepage(content)
 
