@@ -217,6 +217,11 @@ class TextComparator:
         if exact_match_required:
             return False
 
+        # The simplified code discards enough vowel detail that short words
+        # such as "US" and "is" can collapse to the same code.
+        if min(len(word1), len(word2)) <= 2:
+            return False
+
         # More flexible phonetic comparison
         code1 = TextComparator.get_phonetic_code(word1)
         code2 = TextComparator.get_phonetic_code(word2)
@@ -229,8 +234,9 @@ class TextComparator:
         if min(len(code1), len(code2)) / max(len(code1), len(code2)) < 2 / 3:
             return False
 
-        # Check whether the phonetic codes are similar; difflib gives some slack
-        return difflib.SequenceMatcher(None, code1, code2).ratio() > 0.6
+        # Keep only near-identical codes. A lower threshold accepts unrelated
+        # words such as "allegedly"/"legend" and "rare"/"like".
+        return difflib.SequenceMatcher(None, code1, code2).ratio() > 0.8
 
     @staticmethod
     def normalize_word(word: str) -> str:

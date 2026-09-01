@@ -242,6 +242,13 @@ class TestPhoneticMatching:
         comparator = TextComparator()
         assert comparator.is_phonetic_match("heatwaves", "hit") is False
 
+    def test_phonetic_match_rejects_similar_but_distinct_words(self):
+        """Loose code similarity must not accept different pronunciations."""
+        comparator = TextComparator()
+        assert comparator.is_phonetic_match("allegedly", "legend") is False
+        assert comparator.is_phonetic_match("rare", "like") is False
+        assert comparator.is_phonetic_match("US", "is") is False
+
     def test_phonetic_match_case_insensitive(self):
         """Test phonetic matching is case insensitive."""
         comparator = TextComparator()
