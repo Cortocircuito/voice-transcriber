@@ -370,6 +370,18 @@ class TestFlexibleComparison:
         assert result.accuracy == 1.0
         assert result.correct_count == 3
 
+    def test_flexible_recovers_after_spelled_out_acronym(self):
+        """Extra acronym letters do not cause every following word to miss."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "the US is being asked to investigate",
+            "the U S U S is being asked to investigate",
+        )
+
+        assert result.correct_count == 6
+        assert result.missing_words == ["US"]
+        assert result.extra_words == ["U", "S", "U", "S"]
+
     def test_flexible_substitution_marks_extra(self):
         """A substituted word is missing and the wrong word is extra."""
         comparator = TextComparator()
@@ -382,6 +394,19 @@ class TestFlexibleComparison:
         assert "cat" in result.missing_words
         assert "dog" in result.extra_words
         assert result.correct_count == 2
+
+    def test_flexible_rejects_multi_word_false_phonetic_matches(self):
+        """Whisper substitutions must not shift the alignment into false matches."""
+        comparator = TextComparator()
+        result = comparator.compare_flexible(
+            "companies for allegedly destroying rare books",
+            "companies for a legend like destroying red books",
+        )
+
+        assert "allegedly" in result.missing_words
+        assert "rare" in result.missing_words
+        assert {"a", "legend", "like", "red"}.issubset(result.extra_words)
+        assert result.correct_count == 4
 
 
 class TestPerWordComparison:

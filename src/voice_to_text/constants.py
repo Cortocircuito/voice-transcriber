@@ -59,7 +59,7 @@ MAX_DURATION = 300
 # "legacy": strict difflib sequential alignment
 COMPARISON_METHODS = ("flexible", "per_word", "legacy")
 DEFAULT_COMPARISON_METHOD = "flexible"
-COMPARISON_WINDOW_SIZE = 2
+COMPARISON_WINDOW_SIZE = 4
 
 # Config file
 CONFIG_FILE_NAME = "config.json"

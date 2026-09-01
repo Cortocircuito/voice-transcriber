@@ -536,7 +536,7 @@ class TextComparator:
         self,
         original: str,
         transcribed: str,
-        window_size: int = 2,
+        window_size: int = COMPARISON_WINDOW_SIZE,
         use_phonetic: bool = True,
     ) -> ComparisonResult:
         """Compare text with a flexible windowed search.
