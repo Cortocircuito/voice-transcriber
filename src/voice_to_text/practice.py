@@ -364,7 +364,7 @@ class PracticeManager:
         """Run progress bar for recording."""
         import time
 
-        from rich.console import Console
+        from rich.console import Console, Group
         from rich.live import Live
         from rich.progress import (
             BarColumn,
@@ -373,6 +373,8 @@ class PracticeManager:
             TextColumn,
             TimeRemainingColumn,
         )
+        from rich.style import Style
+        from rich.text import Text
 
         lang = self.config.ui_language
         from .i18n import get_language_label
@@ -391,8 +393,28 @@ class PracticeManager:
             f"[{COLOR_ACCENT}]{lang_label} • {duration}s", total=duration
         )
 
+        def generate_display():
+            level = self.recorder.get_audio_level()
+            filled = int(level * 20)
+            level_bar = "#" * filled + "." * (20 - filled)
+
+            if level > 0.7:
+                color = "red"
+            elif level > 0.4:
+                color = "yellow"
+            else:
+                color = "green"
+
+            level_display = Text()
+            level_display.append("Mic level: ")
+            level_display.append(level_bar, style=Style(color=color, bold=True))
+            level_display.append(f"  {level * 100:3.0f}%")
+
+            return Group(progress, level_display)
+
         start_time = time.time()
-        with Live(progress, refresh_per_second=10, console=console):
+        with Live(generate_display(), refresh_per_second=10, console=console) as live:
             while time.time() - start_time < duration:
                 progress.update(task, completed=int(time.time() - start_time))
+                live.update(generate_display())
                 time.sleep(0.1)
