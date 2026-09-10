@@ -11,7 +11,7 @@ from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
 from .i18n import get_text
 from .lessons import Lesson, LessonManager, NetworkError
-from .recorder import Recorder
+from .recorder import Recorder, RecorderError
 from .transcriber import Transcriber
 from .ui import UI
 
@@ -136,6 +136,8 @@ class PracticeManager:
 
                 if action == "new_lesson":
                     break
+                elif action == "retry":
+                    continue
                 elif action == "main_menu":
                     logging.getLogger(LESSONS_LOGGER).setLevel(logging.WARNING)
                     return
@@ -267,8 +269,7 @@ class PracticeManager:
             elif action == "c":
                 continue
             elif action == "r":
-                current_page = 0
-                break
+                return "retry"
 
         return "new_lesson"
 
@@ -288,15 +289,23 @@ class PracticeManager:
 
         mic_ok, _ = self.recorder.check_microphone()
         self.ui.show_mic_status(mic_ok)
+        if not mic_ok:
+            self.ui.show_error(get_text("mic_not_found", lang))
+            return "retry"
 
-        audio_path = self.recorder.start_recording()
+        try:
+            audio_path = self.recorder.start_recording()
+        except RecorderError as e:
+            self.ui.show_error(str(e))
+            return "retry"
         if not audio_path:
             self.ui.show_error("Failed to start recording")
             return "retry"
 
-        self._run_progress(duration)
-
-        self.recorder.stop_recording()
+        try:
+            self._run_progress(duration)
+        finally:
+            self.recorder.stop_recording()
 
         self.ui.show_transcribing()
 

@@ -1,9 +1,18 @@
 """Configuration manager for voice-to-text."""
 
+from typing import Protocol
+
 from .config import Config
 from .history import HistoryManager
 from .i18n import get_language_label, get_text
 from .ui import UI
+
+
+class _ModelSizeConfigurable(Protocol):
+    """Capability needed to apply an updated Whisper model selection."""
+
+    def set_model_size(self, model_size: str) -> None:
+        """Select the model used by future transcriptions."""
 
 
 class ConfigManager:
@@ -14,10 +23,12 @@ class ConfigManager:
         config: Config,
         ui: UI,
         history: HistoryManager,
+        transcriber: _ModelSizeConfigurable,
     ):
         self.config = config
         self.ui = ui
         self.history = history
+        self.transcriber = transcriber
 
     def _save_config(self) -> bool:
         """Save config to file."""
@@ -55,6 +66,7 @@ class ConfigManager:
                 model_size = self.ui.show_model_selector()
                 if model_size:
                     self.config.model_size = model_size
+                    self.transcriber.set_model_size(model_size)
                     self.ui.show_success(self.config.get_model_label())
                     if self.ui.confirm_save_config():
                         self._save_config()

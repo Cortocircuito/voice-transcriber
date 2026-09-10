@@ -24,13 +24,15 @@ from .constants import (
     COLOR_ERROR,
     COLOR_SUCCESS,
     COLOR_WARNING,
+    MAX_DURATION,
     MAX_READING_SPEED,
+    MIN_DURATION,
     MIN_READING_SPEED,
     READING_SPEED_ADVANCED,
     READING_SPEED_BEGINNER,
     READING_SPEED_INTERMEDIATE,
 )
-from .i18n import get_text, get_language_label
+from .i18n import get_language_label, get_text
 from .phonetics import get_words_phonetics
 
 MAX_WIDTH = 96
@@ -873,7 +875,7 @@ class UI:
             )
             if value.strip():
                 new_duration = int(value.strip())
-                if new_duration > 0:
+                if MIN_DURATION <= new_duration <= MAX_DURATION:
                     return new_duration
                 return current_duration
             return current_duration

@@ -4,8 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voice_to_text.practice import PracticeManager
 from voice_to_text.config import Config
+from voice_to_text.lessons import Lesson
+from voice_to_text.practice import PracticeManager
+from voice_to_text.recorder import RecorderError
 
 
 class TestPracticeManager:
@@ -278,3 +280,90 @@ class TestPracticeManager:
         result = manager._calculate_reading_time(300)
 
         assert result > 10
+
+    def test_lesson_completion_retry_restarts_the_lesson(
+        self,
+        mock_config,
+        mock_recorder,
+        mock_transcriber,
+        mock_ui,
+        mock_history,
+        mock_lesson_manager,
+    ):
+        """The completion retry action must not return to lesson selection."""
+        manager = PracticeManager(
+            mock_config,
+            mock_recorder,
+            mock_transcriber,
+            mock_ui,
+            mock_history,
+            mock_lesson_manager,
+        )
+        lesson = Lesson(
+            title="Lesson",
+            url="https://example.com",
+            date="2026-01-01",
+            description="Description",
+            levels=["0"],
+            texts={"0": "One sentence."},
+            level_urls={},
+            paragraphs={},
+        )
+        mock_ui.show_paragraph_page.return_value = "next"
+        mock_ui.show_practice_actions.return_value = "r"
+
+        result = manager._run_lesson_practice_loop(lesson, [("One sentence.", 2)], "0")
+
+        assert result == "retry"
+
+    def test_paragraph_recording_retries_without_starting_when_microphone_fails(
+        self,
+        mock_config,
+        mock_recorder,
+        mock_transcriber,
+        mock_ui,
+        mock_history,
+        mock_lesson_manager,
+    ):
+        """Practice does not try to record after a failed microphone check."""
+        manager = PracticeManager(
+            mock_config,
+            mock_recorder,
+            mock_transcriber,
+            mock_ui,
+            mock_history,
+            mock_lesson_manager,
+        )
+        mock_recorder.check_microphone.return_value = (False, None)
+        lesson = MagicMock(title="Lesson")
+
+        result = manager._run_paragraph_recording(lesson, "Text", 10, 1, 1, 1)
+
+        assert result == "retry"
+        mock_recorder.start_recording.assert_not_called()
+
+    def test_paragraph_recording_retries_when_starting_fails(
+        self,
+        mock_config,
+        mock_recorder,
+        mock_transcriber,
+        mock_ui,
+        mock_history,
+        mock_lesson_manager,
+    ):
+        """Recorder exceptions return to the practice retry action."""
+        manager = PracticeManager(
+            mock_config,
+            mock_recorder,
+            mock_transcriber,
+            mock_ui,
+            mock_history,
+            mock_lesson_manager,
+        )
+        mock_recorder.start_recording.side_effect = RecorderError("Device busy")
+        lesson = MagicMock(title="Lesson")
+
+        result = manager._run_paragraph_recording(lesson, "Text", 10, 1, 1, 1)
+
+        assert result == "retry"
+        mock_ui.show_error.assert_called_once_with("Device busy")

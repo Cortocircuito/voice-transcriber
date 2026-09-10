@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import List, Optional, Tuple
+from typing import BinaryIO, List, Optional, Tuple
 
 from .config import CHANNELS, SAMPLE_RATE
 
@@ -40,7 +40,7 @@ class MicrophoneNotFoundError(RecorderError):
 
 def detect_audio_devices() -> List[str]:
     """Detect available audio recording devices using ALSA."""
-    devices = []
+    devices: List[str] = []
 
     if not shutil.which("arecord"):
         return devices
@@ -137,7 +137,8 @@ class Recorder:
         self._level_monitor_thread: Optional[threading.Thread] = None
         self._current_level: float = 0.0
         self._monitoring: bool = False
-        self._audio_file_handle = None
+        self._audio_file_handle: Optional[BinaryIO] = None
+        self._audio_lock = threading.Lock()
 
     def check_arecord_available(self) -> bool:
         """Check if arecord command is available."""
@@ -297,18 +298,24 @@ class Recorder:
 
             return audio_path
         except PermissionError as e:
+            self._discard_recording(audio_path)
             raise MicrophonePermissionError(
                 f"Permission denied to access microphone: {e}"
             ) from e
         except FileNotFoundError as e:
+            self._discard_recording(audio_path)
             raise MicrophoneNotFoundError(
                 f"Recording device '{self.device}' not found. Check your audio devices."
             ) from e
         except OSError as e:
+            self._discard_recording(audio_path)
             if "Permission denied" in str(e):
                 raise MicrophonePermissionError(
                     f"Permission denied to access microphone: {e}"
                 ) from e
+            raise RecorderError(f"Failed to start recording: {e}") from e
+        except Exception as e:
+            self._discard_recording(audio_path)
             raise RecorderError(f"Failed to start recording: {e}") from e
 
     def _write_wav_header(self, f):
@@ -338,7 +345,7 @@ class Recorder:
         f.seek(40)
         f.write(struct.pack("<I", data_size))
 
-    def _read_audio_stream(self):
+    def _read_audio_stream(self) -> None:
         """Read audio from arecord stdout, write to file, calculate levels."""
         import struct
 
@@ -357,7 +364,10 @@ class Recorder:
                 if not data:
                     break
 
-                self._audio_file_handle.write(data)
+                with self._audio_lock:
+                    if not self._monitoring or not self._audio_file_handle:
+                        break
+                    self._audio_file_handle.write(data)
 
                 if len(data) >= 2:
                     samples = struct.unpack(
@@ -374,23 +384,57 @@ class Recorder:
         """Stop the audio level monitoring thread."""
         self._monitoring = False
         if self._level_monitor_thread:
-            self._level_monitor_thread.join(timeout=0.5)
+            self._level_monitor_thread.join(timeout=1)
             self._level_monitor_thread = None
+
+    def _stop_process(self) -> None:
+        """Stop arecord without allowing a stuck process to block shutdown."""
+        process = self._process
+        self._process = None
+
+        if not process:
+            return
+
+        try:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    logger.warning("arecord did not terminate; killing it")
+                    process.kill()
+                    process.wait(timeout=2)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            logger.warning("Failed to stop arecord: %s", e)
+        finally:
+            if process.stdout:
+                try:
+                    process.stdout.close()
+                except OSError as e:
+                    logger.debug("Failed to close arecord output: %s", e)
+
+    def _discard_recording(self, audio_path: str) -> None:
+        """Stop a failed recording attempt and remove its partial file."""
+        self.stop_recording()
+        try:
+            os.unlink(audio_path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Failed to remove partial recording %s: %s", audio_path, e)
 
     def stop_recording(self) -> bool:
         """Stop recording and finalize WAV file."""
+        self._monitoring = False
+        self._stop_process()
         self._stop_level_monitoring()
 
-        if self._process:
-            self._process.terminate()
-            self._process.wait()
-            self._process = None
-
-        if self._audio_file_handle:
-            data_size = self._audio_file_handle.tell() - 44
-            self._update_wav_header(self._audio_file_handle, data_size)
-            self._audio_file_handle.close()
-            self._audio_file_handle = None
+        with self._audio_lock:
+            if self._audio_file_handle:
+                data_size = max(0, self._audio_file_handle.tell() - 44)
+                self._update_wav_header(self._audio_file_handle, data_size)
+                self._audio_file_handle.close()
+                self._audio_file_handle = None
 
         self._audio_path = None
         return True

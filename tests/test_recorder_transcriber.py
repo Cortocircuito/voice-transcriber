@@ -1,10 +1,11 @@
 """Tests for voice_to_text package."""
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voice_to_text.config import Config, SUPPORTED_LANGUAGES
+from voice_to_text.config import Config
 from voice_to_text.recorder import (
     ArecordNotFoundError,
     MicrophoneNotFoundError,
@@ -110,7 +111,9 @@ class TestRecorder:
     @patch("voice_to_text.recorder.os.path.getsize")
     @patch("voice_to_text.recorder.os.path.exists")
     @patch("voice_to_text.recorder.os.unlink")
-    def test_validate_prerecording_success(self, mock_unlink, mock_exists, mock_getsize, mock_popen):
+    def test_validate_prerecording_success(
+        self, mock_unlink, mock_exists, mock_getsize, mock_popen
+    ):
         mock_exists.return_value = True
         mock_getsize.return_value = 64000
 
@@ -127,7 +130,9 @@ class TestRecorder:
     @patch("voice_to_text.recorder.subprocess.Popen")
     @patch("voice_to_text.recorder.os.path.exists")
     @patch("voice_to_text.recorder.os.unlink")
-    def test_validate_prerecording_file_too_small(self, mock_unlink, mock_exists, mock_popen):
+    def test_validate_prerecording_file_too_small(
+        self, mock_unlink, mock_exists, mock_popen
+    ):
         mock_exists.return_value = True
 
         mock_proc = MagicMock()
@@ -145,7 +150,9 @@ class TestRecorder:
     @patch("voice_to_text.recorder.subprocess.Popen")
     @patch("voice_to_text.recorder.os.path.exists")
     @patch("voice_to_text.recorder.os.unlink")
-    def test_validate_prerecording_permission_denied(self, mock_unlink, mock_exists, mock_popen):
+    def test_validate_prerecording_permission_denied(
+        self, mock_unlink, mock_exists, mock_popen
+    ):
         mock_exists.return_value = False
 
         mock_proc = MagicMock()
@@ -163,7 +170,9 @@ class TestRecorder:
     @patch("voice_to_text.recorder.time.sleep")
     @patch("voice_to_text.recorder.os.path.getsize")
     @patch("voice_to_text.recorder.os")
-    def test_record_with_validation_long_duration(self, mock_os, mock_getsize, mock_sleep, mock_validate, mock_find):
+    def test_record_with_validation_long_duration(
+        self, mock_os, mock_getsize, mock_sleep, mock_validate, mock_find
+    ):
         mock_find.return_value = "default"
         mock_validate.return_value = (True, "OK")
         mock_getsize.return_value = 64000
@@ -188,7 +197,9 @@ class TestRecorder:
     @patch("voice_to_text.recorder.time.sleep")
     @patch("voice_to_text.recorder.os.path.getsize")
     @patch("voice_to_text.recorder.os")
-    def test_record_short_duration_skips_validation(self, mock_os, mock_getsize, mock_sleep, mock_find):
+    def test_record_short_duration_skips_validation(
+        self, mock_os, mock_getsize, mock_sleep, mock_find
+    ):
         mock_find.return_value = "default"
         mock_getsize.return_value = 64000
         mock_os.path.getsize.return_value = 64000
@@ -241,7 +252,9 @@ class TestTranscriber:
         assert transcriber._model is None
 
     def test_init_custom_params(self):
-        transcriber = Transcriber(model_size="small", device="cuda", compute_type="float16")
+        transcriber = Transcriber(
+            model_size="small", device="cuda", compute_type="float16"
+        )
         assert transcriber.model_size == "small"
         assert transcriber.device == "cuda"
         assert transcriber.compute_type == "float16"
@@ -271,10 +284,24 @@ class TestTranscriber:
         mock_whisper.assert_called_once_with("base", device="cpu", compute_type="int8")
 
     @patch("voice_to_text.transcriber.WhisperModel")
+    def test_set_model_size_discards_the_loaded_model(self, mock_whisper):
+        """A changed model size is lazily loaded for the next transcription."""
+        transcriber = Transcriber(model_size="base")
+        _ = transcriber.model
+
+        transcriber.set_model_size("small")
+
+        assert transcriber._model is None
+        _ = transcriber.model
+        assert mock_whisper.call_args_list[1].args[0] == "small"
+
+    @patch("voice_to_text.transcriber.WhisperModel")
     @patch("voice_to_text.transcriber.os.path.exists")
     @patch("voice_to_text.transcriber.os.path.getsize")
     @patch("voice_to_text.transcriber.os.unlink")
-    def test_transcribe_success(self, mock_unlink, mock_getsize, mock_exists, mock_whisper):
+    def test_transcribe_success(
+        self, mock_unlink, mock_getsize, mock_exists, mock_whisper
+    ):
         mock_exists.return_value = True
         mock_getsize.return_value = 1000
 
@@ -297,7 +324,9 @@ class TestTranscriber:
     @patch("voice_to_text.transcriber.os.path.exists")
     @patch("voice_to_text.transcriber.os.path.getsize")
     @patch("voice_to_text.transcriber.os.unlink")
-    def test_transcribe_empty_result(self, mock_unlink, mock_getsize, mock_exists, mock_whisper):
+    def test_transcribe_empty_result(
+        self, mock_unlink, mock_getsize, mock_exists, mock_whisper
+    ):
         mock_exists.return_value = True
         mock_getsize.return_value = 1000
 
@@ -317,7 +346,9 @@ class TestTranscriber:
     @patch("voice_to_text.transcriber.os.path.exists")
     @patch("voice_to_text.transcriber.os.path.getsize")
     @patch("voice_to_text.transcriber.os.unlink")
-    def test_transcribe_exception(self, mock_unlink, mock_getsize, mock_exists, mock_whisper):
+    def test_transcribe_exception(
+        self, mock_unlink, mock_getsize, mock_exists, mock_whisper
+    ):
         mock_exists.return_value = True
         mock_getsize.return_value = 1000
 
@@ -337,7 +368,9 @@ class TestTranscriber:
     @patch("voice_to_text.transcriber.os.path.exists")
     @patch("voice_to_text.transcriber.os.path.getsize")
     @patch("voice_to_text.transcriber.os.unlink")
-    def test_transcribe_cleans_up_audio_file(self, mock_unlink, mock_getsize, mock_exists, mock_whisper):
+    def test_transcribe_cleans_up_audio_file(
+        self, mock_unlink, mock_getsize, mock_exists, mock_whisper
+    ):
         mock_exists.return_value = True
         mock_getsize.return_value = 1000
 
@@ -409,6 +442,63 @@ class TestRecorderErrorHandling:
         recorder = Recorder()
         with pytest.raises(MicrophonePermissionError):
             recorder.start_recording()
+
+    @patch("voice_to_text.recorder.os.unlink")
+    @patch("voice_to_text.recorder.subprocess.Popen")
+    @patch("voice_to_text.recorder.tempfile.NamedTemporaryFile")
+    @patch("voice_to_text.recorder.shutil.which")
+    def test_start_recording_cleans_up_partial_file_on_failure(
+        self, mock_which, mock_temp_file, mock_popen, mock_unlink
+    ):
+        """Startup failures remove the temporary WAV file they create."""
+        mock_which.return_value = "/usr/bin/arecord"
+        mock_popen.side_effect = FileNotFoundError("Device not found")
+        mock_temp_file.return_value.__enter__.return_value.name = "/tmp/partial.wav"
+        recorder = Recorder(device="default")
+
+        with pytest.raises(MicrophoneNotFoundError):
+            recorder.start_recording()
+
+        mock_unlink.assert_called_once_with("/tmp/partial.wav")
+
+    def test_stop_recording_terminates_process_before_joining_reader(self):
+        """Terminating arecord unblocks stdout before the reader thread joins."""
+        recorder = Recorder(device="default")
+        events = []
+        process = MagicMock()
+        process.poll.return_value = None
+        process.terminate.side_effect = lambda: events.append("terminate")
+        process.wait.side_effect = lambda timeout: events.append("wait")
+        thread = MagicMock()
+        thread.join.side_effect = lambda timeout: events.append("join")
+        file_handle = MagicMock()
+        file_handle.tell.return_value = 44
+        recorder._process = process
+        recorder._level_monitor_thread = thread
+        recorder._audio_file_handle = file_handle
+
+        recorder.stop_recording()
+
+        assert events.index("terminate") < events.index("join")
+        process.wait.assert_called_once_with(timeout=2)
+        thread.join.assert_called_once_with(timeout=1)
+
+    def test_stop_recording_kills_process_after_termination_timeout(self):
+        """A stuck arecord process is killed instead of hanging shutdown."""
+        recorder = Recorder(device="default")
+        process = MagicMock()
+        process.poll.return_value = None
+        process.wait.side_effect = [
+            subprocess.TimeoutExpired(["arecord"], 2),
+            None,
+        ]
+        recorder._process = process
+
+        recorder.stop_recording()
+
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+        assert process.wait.call_count == 2
 
 
 class TestTranscriberErrorHandling:
