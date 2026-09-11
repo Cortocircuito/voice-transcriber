@@ -303,7 +303,7 @@ class PracticeManager:
             return "retry"
 
         try:
-            self._run_progress(duration)
+            recorded_duration = self._run_progress(duration)
         finally:
             recording_stopped = self.recorder.stop_recording()
 
@@ -341,7 +341,7 @@ class PracticeManager:
                 para_range = f"P{start_paragraph}-{end_paragraph}"
             self.history.add_entry(
                 language=self.config.language,
-                duration=duration,
+                duration=recorded_duration,
                 text=f"[Practice: {lesson.title[:30]} {para_range}] {transcribed}",
             )
 
@@ -373,8 +373,8 @@ class PracticeManager:
 
         return "exit"
 
-    def _run_progress(self, duration: int) -> None:
-        """Run progress bar for recording."""
+    def _run_progress(self, duration: int) -> int:
+        """Run recording progress and return the elapsed duration in seconds."""
         import time
 
         from rich.console import Console, Group
@@ -425,9 +425,17 @@ class PracticeManager:
 
             return Group(progress, level_display)
 
-        start_time = time.time()
-        with Live(generate_display(), refresh_per_second=10, console=console) as live:
-            while time.time() - start_time < duration:
-                progress.update(task, completed=int(time.time() - start_time))
-                live.update(generate_display())
-                time.sleep(0.1)
+        start_time = time.monotonic()
+        with self.ui.recording_stop_listener() as stop_requested:
+            with Live(
+                generate_display(), refresh_per_second=10, console=console
+            ) as live:
+                while True:
+                    elapsed = time.monotonic() - start_time
+                    if elapsed >= duration:
+                        return duration
+                    if stop_requested():
+                        return max(1, math.ceil(elapsed))
+                    progress.update(task, completed=int(elapsed))
+                    live.update(generate_display())
+                    time.sleep(0.1)

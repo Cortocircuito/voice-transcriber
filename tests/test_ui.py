@@ -1,6 +1,9 @@
 """Tests for UI module."""
 
+import os
+import pty
 import signal
+import termios
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
@@ -390,3 +393,74 @@ class TestUI:
             ui = UI(mock_config)
 
             assert ui.export_text("Hello world") is False
+
+    def test_recording_stop_listener_stops_only_on_enter(self, mock_config):
+        """Partial input does not block or stop recording before Enter."""
+        master, slave = pty.openpty()
+        input_stream = os.fdopen(slave, "r")
+        original_settings = termios.tcgetattr(input_stream.fileno())
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin", input_stream),
+        ):
+            ui = UI(mock_config)
+
+            with ui.recording_stop_listener() as stop_requested:
+                os.write(master, b"partial")
+                assert stop_requested() is False
+                os.write(master, b"\n")
+                assert stop_requested() is True
+
+        assert termios.tcgetattr(input_stream.fileno()) == original_settings
+        input_stream.close()
+        os.close(master)
+
+    def test_recording_stop_listener_ignores_control_d_and_non_interactive_input(
+        self, mock_config
+    ):
+        """Control-D and piped input must not automatically end a recording."""
+        master, slave = pty.openpty()
+        input_stream = os.fdopen(slave, "r")
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin", input_stream),
+        ):
+            ui = UI(mock_config)
+
+            with ui.recording_stop_listener() as stop_requested:
+                os.write(master, b"\x04")
+                assert stop_requested() is False
+
+        input_stream.close()
+        os.close(master)
+
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin") as stdin,
+        ):
+            stdin.isatty.return_value = False
+            ui = UI(mock_config)
+
+            with ui.recording_stop_listener() as stop_requested:
+                assert stop_requested() is False
+
+    def test_recording_stop_listener_ignores_eof(self, mock_config):
+        """An EOF returned by the terminal does not stop recording."""
+        master, slave = pty.openpty()
+        input_stream = os.fdopen(slave, "r")
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin", input_stream),
+            patch("voice_to_text.ui.os.read", return_value=b""),
+        ):
+            ui = UI(mock_config)
+
+            with ui.recording_stop_listener() as stop_requested:
+                assert stop_requested() is False
+
+        input_stream.close()
+        os.close(master)

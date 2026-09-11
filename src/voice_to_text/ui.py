@@ -1,9 +1,14 @@
 """UI components for voice-to-text using Rich library."""
 
+import fcntl
+import os
 import signal
 import sys
+import termios
 import time
-from typing import Any, Callable, Optional, Union
+import tty
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator, Optional, Union
 
 from rich.align import Align
 from rich.box import ROUNDED
@@ -144,8 +149,48 @@ class UI:
         content = Text()
         content.append(f"\n  {get_text('recording', lang)}\n", style="bold red")
         content.append(f"\n  {get_text('speak_now', lang)}\n", style="bold yellow")
+        content.append(f"  {get_text('press_enter_stop', lang)}\n", style="dim")
         self.console.print()
         self.console.print(self._create_panel(content, border_style="red"))
+
+    @contextmanager
+    def recording_stop_listener(self) -> Iterator[Callable[[], bool]]:
+        """Yield a nonblocking callback that stops recording only on Enter."""
+        if not sys.stdin.isatty():
+            yield lambda: False
+            return
+
+        try:
+            file_descriptor = sys.stdin.fileno()
+            terminal_settings = termios.tcgetattr(file_descriptor)
+            status_flags = fcntl.fcntl(file_descriptor, fcntl.F_GETFL)
+            tty.setcbreak(file_descriptor)
+            fcntl.fcntl(file_descriptor, fcntl.F_SETFL, status_flags | os.O_NONBLOCK)
+        except (AttributeError, OSError, ValueError):
+            yield lambda: False
+            return
+
+        def stop_requested() -> bool:
+            try:
+                while True:
+                    data = os.read(file_descriptor, 1024)
+                    if not data:
+                        return False
+                    if b"\n" in data or b"\r" in data:
+                        return True
+            except BlockingIOError:
+                return False
+            except OSError:
+                return False
+
+        try:
+            yield stop_requested
+        finally:
+            try:
+                fcntl.fcntl(file_descriptor, fcntl.F_SETFL, status_flags)
+                termios.tcsetattr(file_descriptor, termios.TCSADRAIN, terminal_settings)
+            except OSError:
+                pass
 
     def show_progress(self, duration: int, mic_level: Optional[float] = None):
         """Show recording progress with countdown."""
