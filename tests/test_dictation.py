@@ -1,5 +1,6 @@
 """Tests for dictation manager recording failures."""
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 import pytest
@@ -160,3 +161,16 @@ def test_run_saves_early_stop_duration_in_history(manager: DictationManager) -> 
     manager.run()
 
     assert manager.history.add_entry.call_args.kwargs["duration"] == 4
+
+
+def test_progress_stops_when_enter_is_requested(manager: DictationManager) -> None:
+    """Dictation progress exits immediately when the listener sees Enter."""
+    manager.recorder.get_audio_level.return_value = 0.5
+
+    @contextmanager
+    def stop_listener():
+        yield lambda: True
+
+    manager.ui.recording_stop_listener.side_effect = stop_listener
+
+    assert manager._run_progress(10) == 1

@@ -222,15 +222,18 @@ class DictationManager:
             return Group(progress, level_display)
 
         start_time = time.monotonic()
-        with Live(generate_display(), refresh_per_second=10, console=console) as live:
-            while True:
-                elapsed = time.monotonic() - start_time
-                if elapsed >= duration:
-                    return duration
-                if self.ui.recording_stop_requested():
-                    return max(1, ceil(elapsed))
-                live.update(generate_display())
-                time.sleep(0.1)
+        with self.ui.recording_stop_listener() as stop_requested:
+            with Live(
+                generate_display(), refresh_per_second=10, console=console
+            ) as live:
+                while True:
+                    elapsed = time.monotonic() - start_time
+                    if elapsed >= duration:
+                        return duration
+                    if stop_requested():
+                        return max(1, ceil(elapsed))
+                    live.update(generate_display())
+                    time.sleep(0.1)
 
     def _format_level_bar(self, level: float, width: int = 20) -> str:
         """Format audio level as a visual bar."""

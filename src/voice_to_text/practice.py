@@ -426,13 +426,16 @@ class PracticeManager:
             return Group(progress, level_display)
 
         start_time = time.monotonic()
-        with Live(generate_display(), refresh_per_second=10, console=console) as live:
-            while True:
-                elapsed = time.monotonic() - start_time
-                if elapsed >= duration:
-                    return duration
-                if self.ui.recording_stop_requested():
-                    return max(1, math.ceil(elapsed))
-                progress.update(task, completed=int(elapsed))
-                live.update(generate_display())
-                time.sleep(0.1)
+        with self.ui.recording_stop_listener() as stop_requested:
+            with Live(
+                generate_display(), refresh_per_second=10, console=console
+            ) as live:
+                while True:
+                    elapsed = time.monotonic() - start_time
+                    if elapsed >= duration:
+                        return duration
+                    if stop_requested():
+                        return max(1, math.ceil(elapsed))
+                    progress.update(task, completed=int(elapsed))
+                    live.update(generate_display())
+                    time.sleep(0.1)
