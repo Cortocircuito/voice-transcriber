@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from voice_to_text.ui import UI
-from voice_to_text.config import Config
 from voice_to_text.comparison import TextComparator
+from voice_to_text.config import Config
+from voice_to_text.ui import UI
 
 
 class TestUI:
@@ -229,6 +229,22 @@ class TestUI:
             console_instance = MagicMock()
             console_instance.width = 80
             console_instance.input = MagicMock(return_value="abc")
+            mock_console.return_value = console_instance
+
+            ui = UI(mock_config)
+            result = ui.prompt_duration_change(15, 30)
+
+            assert result == 15
+
+    def test_prompt_duration_change_rejects_values_above_limit(self, mock_config):
+        """Practice duration stays within the configured recording limit."""
+        with (
+            patch("voice_to_text.ui.Console") as mock_console,
+            patch("voice_to_text.ui.signal"),
+        ):
+            console_instance = MagicMock()
+            console_instance.width = 80
+            console_instance.input = MagicMock(return_value="301")
             mock_console.return_value = console_instance
 
             ui = UI(mock_config)

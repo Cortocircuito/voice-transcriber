@@ -1,6 +1,6 @@
 """Tests for CLI module."""
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -160,6 +160,45 @@ class TestCLI:
 
             mock_lesson_manager.shutdown.assert_called_once()
 
+    def test_cleanup_stops_active_recording(self, mock_config, mock_history):
+        """Cleanup finalizes an active recorder before exiting."""
+        with (
+            patch("voice_to_text.cli.Recorder") as mock_recorder,
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.LessonManager"),
+        ):
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._cleanup()
+
+            mock_recorder.return_value.stop_recording.assert_called_once()
+
+    def test_cleanup_saves_history_when_recorder_stopping_fails(
+        self, mock_config, mock_history
+    ):
+        """Recorder cleanup errors do not prevent history persistence."""
+        with (
+            patch("voice_to_text.cli.Recorder") as mock_recorder,
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.LessonManager"),
+        ):
+            mock_recorder.return_value.stop_recording.side_effect = OSError(
+                "disk failure"
+            )
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._cleanup()
+
+            mock_history.save.assert_called_once()
+
     def test_cleanup_is_idempotent(self, mock_config, mock_history):
         """Calling cleanup twice saves history only once."""
         mock_history.get_entries = MagicMock(return_value=[{"text": "test"}])
@@ -289,3 +328,68 @@ class TestCLIArguments:
 
             mock_load.assert_called_once()
             assert mock_config.words_per_minute == 100
+
+    @pytest.mark.parametrize(
+        ("argument", "value"),
+        [
+            ("--duration", "0"),
+            ("--duration", "301"),
+            ("--reading-speed", "0"),
+            ("--reading-speed", "301"),
+        ],
+    )
+    def test_main_rejects_out_of_range_numeric_arguments(self, argument, value):
+        """CLI ranges prevent unsafe values reaching the application."""
+        with (
+            patch("voice_to_text.cli.CLI") as mock_cli_class,
+            patch("sys.argv", ["voice-to-text", argument, value]),
+            pytest.raises(SystemExit),
+        ):
+            from voice_to_text.cli import main
+
+            main()
+
+        mock_cli_class.assert_not_called()
+
+    def test_run_stops_when_model_loading_fails(self):
+        """The menu is not shown when Whisper could not load."""
+        with (
+            patch("voice_to_text.cli.Recorder"),
+            patch("voice_to_text.cli.Transcriber") as mock_transcriber,
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.HistoryManager"),
+            patch("voice_to_text.cli.LessonManager"),
+        ):
+            ui = MagicMock()
+            ui.console = MagicMock()
+            mock_ui.return_value = ui
+            mock_transcriber.return_value.load_model.return_value = (
+                False,
+                "Model failed",
+            )
+            cli = CLI(Config())
+
+            cli.run(quick=True)
+
+            ui.show_error.assert_called_once_with("Model failed")
+
+    def test_run_allows_configuration_without_loading_the_model(self):
+        """Configuration remains available when Whisper cannot be downloaded."""
+        with (
+            patch("voice_to_text.cli.Recorder"),
+            patch("voice_to_text.cli.Transcriber") as mock_transcriber,
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.HistoryManager"),
+            patch("voice_to_text.cli.LessonManager"),
+            patch("voice_to_text.cli.ConfigManager") as mock_config_manager,
+        ):
+            ui = MagicMock()
+            ui.console = MagicMock()
+            ui.show_menu.side_effect = ["3", "4"]
+            mock_ui.return_value = ui
+            cli = CLI(Config())
+
+            cli.run()
+
+            mock_config_manager.return_value.run.assert_called_once()
+            mock_transcriber.return_value.load_model.assert_not_called()

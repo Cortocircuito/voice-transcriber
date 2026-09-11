@@ -16,11 +16,11 @@ from rich.style import Style
 from rich.text import Text
 
 from .comparison import TextComparator
-from .config import Config, WORDS_PER_PAGE_MAX
+from .config import WORDS_PER_PAGE_MAX, Config
 from .constants import COLOR_ACCENT, COLOR_SUCCESS
 from .history import HistoryManager
-from .i18n import get_language_label
-from .recorder import Recorder
+from .i18n import get_language_label, get_text
+from .recorder import Recorder, RecorderError
 from .transcriber import Transcriber
 from .ui import UI
 
@@ -50,17 +50,29 @@ class DictationManager:
         while True:
             self.ui.show_recording_start()
 
-            mic_ok, level = self.recorder.check_microphone()
+            mic_ok, _ = self.recorder.check_microphone()
             self.ui.show_mic_status(mic_ok)
+            if not mic_ok:
+                self.ui.show_error(get_text("mic_not_found", self.config.ui_language))
+                return
 
-            audio_path = self.recorder.start_recording()
+            try:
+                audio_path = self.recorder.start_recording()
+            except RecorderError as e:
+                self.ui.show_error(str(e))
+                return
             if not audio_path:
                 self.ui.show_error("Failed to start recording")
                 continue
 
-            self._run_progress(self.config.duration)
+            try:
+                self._run_progress(self.config.duration)
+            finally:
+                recording_stopped = self.recorder.stop_recording()
 
-            self.recorder.stop_recording()
+            if not recording_stopped:
+                self.ui.show_error("Failed to finalize recording")
+                return
 
             self.ui.show_transcribing()
 

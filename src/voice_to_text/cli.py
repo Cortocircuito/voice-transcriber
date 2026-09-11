@@ -5,9 +5,15 @@ import atexit
 import logging
 import signal
 import sys
-from typing import Optional
+from typing import Callable, Optional
 
-from .config import Config
+from .config import (
+    MAX_DURATION,
+    MAX_READING_SPEED,
+    MIN_DURATION,
+    MIN_READING_SPEED,
+    Config,
+)
 from .configurator import ConfigManager
 from .dictation import DictationManager
 from .history import HistoryManager
@@ -65,6 +71,7 @@ class CLI:
             config=self.config,
             ui=self.ui,
             history=self.history,
+            transcriber=self.transcriber,
         )
 
         self._setup_signals()
@@ -86,19 +93,38 @@ class CLI:
         self._cleaned_up = True
         # Stop any background lesson download so its worker thread does not
         # keep the interpreter alive at exit.
-        self.lesson_manager.shutdown()
-        entries = self.history.get_entries()
-        if entries:
-            self.ui.console.print(
-                f"\n[dim]{get_text('history_saved', self.config.ui_language)}...[/dim]"
-            )
-        self.history.save()
+        try:
+            self.recorder.stop_recording()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to stop recorder: %s", e)
+
+        try:
+            self.lesson_manager.shutdown()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to stop lesson manager: %s", e)
+
+        try:
+            entries = self.history.get_entries()
+            if entries:
+                self.ui.console.print(
+                    f"\n[dim]{get_text('history_saved', self.config.ui_language)}...[/dim]"
+                )
+            self.history.save()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to save history: %s", e)
 
     def _signal_handler(self, signum, frame):
         self.recorder.interrupt()
         self._cleanup()
         self.ui.show_goodbye()
         sys.exit(0)
+
+    def _ensure_model_loaded(self) -> bool:
+        """Load Whisper only when a transcription mode is selected."""
+        model_loaded, message = self.transcriber.load_model()
+        if not model_loaded:
+            self.ui.show_error(message)
+        return model_loaded
 
     def show_menu(self):
         """Show main menu."""
@@ -114,8 +140,11 @@ class CLI:
             choice = self.ui.show_menu()
 
             if choice == "1":
-                self.dictation_manager.run()
+                if self._ensure_model_loaded():
+                    self.dictation_manager.run()
             elif choice == "2":
+                if not self._ensure_model_loaded():
+                    continue
                 if self.lesson_manager.is_preloading():
                     self.ui.show_warning(
                         get_text("lessons_downloading", self.config.ui_language)
@@ -164,13 +193,29 @@ class CLI:
             f"[dim]{get_text('ready', self.config.ui_language)}[/dim]"
         )
 
-        self.transcriber.load_model()
-
         if quick:
-            self.dictation_manager.run()
-            self.ui.show_goodbye()
+            if self._ensure_model_loaded():
+                self.dictation_manager.run()
+                self.ui.show_goodbye()
         else:
             self.show_menu()
+
+
+def _bounded_int(minimum: int, maximum: int, name: str) -> Callable[[str], int]:
+    """Build an argparse converter for an integer within an inclusive range."""
+
+    def convert(value: str) -> int:
+        try:
+            number = int(value)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"{name} must be an integer") from e
+        if not minimum <= number <= maximum:
+            raise argparse.ArgumentTypeError(
+                f"{name} must be between {minimum} and {maximum}"
+            )
+        return number
+
+    return convert
 
 
 def main():
@@ -178,7 +223,7 @@ def main():
     parser = argparse.ArgumentParser(description="Voice to Text - Speech transcription")
     parser.add_argument(
         "--duration",
-        type=int,
+        type=_bounded_int(MIN_DURATION, MAX_DURATION, "duration"),
         default=None,
         help="Recording duration in seconds",
     )
@@ -190,7 +235,7 @@ def main():
     )
     parser.add_argument(
         "--reading-speed",
-        type=int,
+        type=_bounded_int(MIN_READING_SPEED, MAX_READING_SPEED, "reading speed"),
         default=None,
         help="Reading speed in words per minute",
     )

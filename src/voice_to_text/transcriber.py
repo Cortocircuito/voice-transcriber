@@ -3,10 +3,9 @@
 import os
 from typing import Callable, Optional, Tuple
 
+from faster_whisper import WhisperModel  # type: ignore[import-untyped]
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-
-from faster_whisper import WhisperModel
 
 from .config import Config
 from .constants import COLOR_ACCENT, COLOR_DIM, COLOR_ERROR, COLOR_SUCCESS
@@ -64,6 +63,12 @@ class Transcriber:
     @property
     def model_size(self) -> str:
         return self._model_size or "base"
+
+    def set_model_size(self, model_size: str) -> None:
+        """Select a model for future transcriptions."""
+        if model_size != self.model_size:
+            self._model_size = model_size
+            self._model = None
 
     @property
     def model(self) -> WhisperModel:
