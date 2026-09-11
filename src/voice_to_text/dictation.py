@@ -2,6 +2,7 @@
 
 import re
 import time
+from pathlib import Path
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -96,20 +97,75 @@ class DictationManager:
             if not segments_displayed:
                 self.ui.show_transcription(text if text else "")
 
-            action = self.ui.show_actions()
+            while True:
+                action = self.ui.show_actions()
 
-            if action == "d":
-                new_duration = self.ui.prompt_duration()
-                if new_duration:
-                    validated = self.config.validate_duration(str(new_duration))
-                    if validated != self.config.duration:
-                        self.config.duration = validated
-            elif action == "i":
-                lang_code = self.ui.show_language_selector()
-                if lang_code:
-                    self.config.language = lang_code
-            elif action == "s":
+                if action == "c":
+                    if text.strip():
+                        self.ui.copy_text(text)
+                    else:
+                        self.ui.show_warning(
+                            get_text("no_transcription", self.config.ui_language)
+                        )
+                    continue
+                if action == "w":
+                    if text.strip():
+                        path = self.ui.prompt_transcription_path()
+                        if path:
+                            self._save_transcription(text, path)
+                    else:
+                        self.ui.show_warning(
+                            get_text("no_transcription", self.config.ui_language)
+                        )
+                    continue
+                if action == "e":
+                    if text.strip():
+                        self.ui.export_text(text)
+                    else:
+                        self.ui.show_warning(
+                            get_text("no_transcription", self.config.ui_language)
+                        )
+                    continue
+                if action == "d":
+                    new_duration = self.ui.prompt_duration()
+                    if new_duration:
+                        validated = self.config.validate_duration(str(new_duration))
+                        if validated != self.config.duration:
+                            self.config.duration = validated
+                    break
+                if action == "i":
+                    lang_code = self.ui.show_language_selector()
+                    if lang_code:
+                        self.config.language = lang_code
+                    break
+                if action == "s":
+                    return
                 break
+
+    def _save_transcription(self, text: str, path_value: str) -> None:
+        """Save a transcription as plain text or Markdown."""
+        path = Path(path_value).expanduser()
+        if not path.suffix:
+            path = path.with_suffix(".txt")
+        if path.suffix.lower() not in {".txt", ".md"}:
+            self.ui.show_error(
+                get_text("invalid_transcription_format", self.config.ui_language)
+            )
+            return
+
+        content = text.rstrip() + "\n"
+        if path.suffix.lower() == ".md":
+            content = f"# Dictation\n\n{content}"
+
+        try:
+            path.write_text(content, encoding="utf-8")
+        except OSError as e:
+            self.ui.show_error(f"Failed to save transcription: {e}")
+            return
+
+        self.ui.show_success(
+            get_text("transcription_saved", self.config.ui_language).format(path=path)
+        )
 
     def _run_progress(self, duration: int) -> None:
         """Run progress bar for recording with real-time audio level."""

@@ -1,6 +1,7 @@
 """Tests for UI module."""
 
 import signal
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -364,3 +365,15 @@ class TestUI:
             text = self._group_text(group)
             assert "Extra Words" in text
             assert "extra" in text
+
+    def test_export_text_writes_unformatted_text_to_stdout(self, mock_config):
+        """Dictation export is usable in shell redirection and pipelines."""
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            ui = UI(mock_config)
+            ui.export_text("Hello world\n")
+
+        assert stdout.getvalue() == "Hello world\n"
