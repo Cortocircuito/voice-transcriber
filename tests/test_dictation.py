@@ -58,3 +58,53 @@ def test_run_does_not_transcribe_when_recording_finalization_fails(
 
     manager.transcriber.transcribe_streaming.assert_not_called()
     manager.ui.show_error.assert_called_once_with("Failed to finalize recording")
+
+
+def test_run_allows_copy_and_stdout_export_before_exit(
+    manager: DictationManager,
+) -> None:
+    """Post-transcription utilities keep the latest dictation available."""
+    manager.recorder.check_microphone.return_value = (True, 0.5)
+    manager.recorder.start_recording.return_value = "/tmp/test.wav"
+    manager.recorder.stop_recording.return_value = True
+    manager.transcriber.transcribe_streaming.return_value = (True, "Hello world")
+    manager.ui.show_actions.side_effect = ["c", "e", "s"]
+    manager._run_progress = MagicMock()
+
+    manager.run()
+
+    manager.ui.copy_text.assert_called_once_with("Hello world")
+    manager.ui.export_text.assert_called_once_with("Hello world")
+    manager.history.add_entry.assert_called_once()
+
+
+def test_save_transcription_writes_text_file(
+    manager: DictationManager, tmp_path
+) -> None:
+    """A path without an extension is saved as a text file."""
+    path = tmp_path / "dictation"
+
+    manager._save_transcription("Hello world", str(path))
+
+    assert path.with_suffix(".txt").read_text(encoding="utf-8") == "Hello world\n"
+    manager.ui.show_success.assert_called_once()
+
+
+def test_save_transcription_writes_markdown_file(
+    manager: DictationManager, tmp_path
+) -> None:
+    """Markdown exports include a document title and the transcription."""
+    path = tmp_path / "dictation.md"
+
+    manager._save_transcription("Hello world", str(path))
+
+    assert path.read_text(encoding="utf-8") == "# Dictation\n\nHello world\n"
+
+
+def test_save_transcription_rejects_unsupported_extension(
+    manager: DictationManager, tmp_path
+) -> None:
+    """Only text and Markdown destinations are accepted."""
+    manager._save_transcription("Hello world", str(tmp_path / "dictation.pdf"))
+
+    manager.ui.show_error.assert_called_once()

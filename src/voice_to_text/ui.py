@@ -1,6 +1,7 @@
 """UI components for voice-to-text using Rich library."""
 
 import signal
+import sys
 import time
 from typing import Any, Callable, Optional, Union
 
@@ -480,6 +481,9 @@ class UI:
         self.console.print(
             f"\n[dim][D] {get_text('action_duration', lang)} | "
             f"[I] {get_text('action_language', lang)} | "
+            f"[C] {get_text('action_copy', lang)} | "
+            f"[W] {get_text('action_save', lang)} | "
+            f"[E] {get_text('action_export', lang)} | "
             f"[S] {get_text('action_exit', lang)}[/dim]"
         )
         try:
@@ -489,6 +493,36 @@ class UI:
             return action.strip().lower()
         except (EOFError, KeyboardInterrupt):
             return "s"
+
+    def prompt_transcription_path(self) -> Optional[str]:
+        """Prompt for a destination path for the latest transcription."""
+        lang = self.config.ui_language
+        try:
+            path = self.console.input(
+                f"[bold {ACCENT}]{get_text('save_transcription_path', lang)}:[/bold {ACCENT}] "
+            ).strip()
+            return path or None
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+    def copy_text(self, text: str) -> None:
+        """Copy arbitrary text to the system clipboard."""
+        try:
+            import pyperclip  # type: ignore[import-untyped]
+
+            pyperclip.copy(text)
+            self.console.print(
+                f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
+            )
+        except Exception:
+            self.console.print(
+                f"[{COLOR_ERROR}]Error: Clipboard not available. "
+                f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
+            )
+
+    def export_text(self, text: str) -> None:
+        """Write unformatted text to standard output."""
+        sys.stdout.write(f"{text.rstrip()}\n")
 
     def confirm_clear_history(self, entry_count: int) -> bool:
         """Show confirmation dialog for clearing history.
@@ -1213,19 +1247,8 @@ class UI:
 
     def copy_stored_text(self) -> None:
         """Copy the stored original text to clipboard."""
-        try:
-            import pyperclip  # type: ignore[import-untyped]
-
-            if hasattr(self, "_copy_original_text") and self._copy_original_text:
-                pyperclip.copy(self._copy_original_text)
-                self.console.print(
-                    f"[{COLOR_SUCCESS}]{get_text('copied', self.config.ui_language)}[/{COLOR_SUCCESS}]"
-                )
-        except Exception:
-            self.console.print(
-                f"[{COLOR_ERROR}]Error: Clipboard not available. "
-                f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
-            )
+        if hasattr(self, "_copy_original_text") and self._copy_original_text:
+            self.copy_text(self._copy_original_text)
 
     def show_lesson_complete(self) -> None:
         """Show message when all paragraphs are completed."""
