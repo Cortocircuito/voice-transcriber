@@ -374,19 +374,6 @@ class TestUI:
             patch("voice_to_text.ui.sys.stdout", new_callable=StringIO) as stdout,
         ):
             ui = UI(mock_config)
-            result = ui.export_text("Hello world\n")
+            ui.export_text("Hello world\n")
 
         assert stdout.getvalue() == "Hello world\n"
-        assert result is True
-
-    def test_export_text_returns_false_when_stdout_is_closed(self, mock_config):
-        """A broken output pipe does not raise from the UI action."""
-        with (
-            patch("voice_to_text.ui.Console"),
-            patch("voice_to_text.ui.signal"),
-            patch("voice_to_text.ui.sys.stdout") as stdout,
-        ):
-            stdout.write.side_effect = BrokenPipeError()
-            ui = UI(mock_config)
-
-            assert ui.export_text("Hello world") is False
