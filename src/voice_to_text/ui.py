@@ -520,9 +520,13 @@ class UI:
                 f"Install 'wl-clipboard' (Wayland) or 'xclip' (X11).[/]"
             )
 
-    def export_text(self, text: str) -> None:
+    def export_text(self, text: str) -> bool:
         """Write unformatted text to standard output."""
-        sys.stdout.write(f"{text.rstrip()}\n")
+        try:
+            sys.stdout.write(f"{text.rstrip()}\n")
+            return True
+        except (OSError, UnicodeError):
+            return False
 
     def confirm_clear_history(self, entry_count: int) -> bool:
         """Show confirmation dialog for clearing history.

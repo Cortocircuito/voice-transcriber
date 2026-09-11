@@ -120,7 +120,8 @@ class DictationManager:
                     continue
                 if action == "e":
                     if text.strip():
-                        self.ui.export_text(text)
+                        if not self.ui.export_text(text):
+                            return
                     else:
                         self.ui.show_warning(
                             get_text("no_transcription", self.config.ui_language)
@@ -144,22 +145,36 @@ class DictationManager:
 
     def _save_transcription(self, text: str, path_value: str) -> None:
         """Save a transcription as plain text or Markdown."""
-        path = Path(path_value).expanduser()
-        if not path.suffix:
-            path = path.with_suffix(".txt")
-        if path.suffix.lower() not in {".txt", ".md"}:
+        path: Path | None = None
+        created = False
+        try:
+            path = Path(path_value).expanduser()
+            if not path.suffix:
+                path = path.with_suffix(".txt")
+            if path.suffix.lower() not in {".txt", ".md"}:
+                self.ui.show_error(
+                    get_text("invalid_transcription_format", self.config.ui_language)
+                )
+                return
+
+            content = text.rstrip() + "\n"
+            if path.suffix.lower() == ".md":
+                content = f"# Dictation\n\n{content}"
+
+            with path.open("x", encoding="utf-8") as transcription_file:
+                created = True
+                transcription_file.write(content)
+        except FileExistsError:
             self.ui.show_error(
-                get_text("invalid_transcription_format", self.config.ui_language)
+                get_text("transcription_file_exists", self.config.ui_language)
             )
             return
-
-        content = text.rstrip() + "\n"
-        if path.suffix.lower() == ".md":
-            content = f"# Dictation\n\n{content}"
-
-        try:
-            path.write_text(content, encoding="utf-8")
-        except OSError as e:
+        except (OSError, RuntimeError, ValueError) as e:
+            if created and path:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
             self.ui.show_error(f"Failed to save transcription: {e}")
             return
 
