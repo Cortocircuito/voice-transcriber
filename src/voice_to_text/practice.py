@@ -305,7 +305,11 @@ class PracticeManager:
         try:
             self._run_progress(duration)
         finally:
-            self.recorder.stop_recording()
+            recording_stopped = self.recorder.stop_recording()
+
+        if not recording_stopped:
+            self.ui.show_error("Failed to finalize recording")
+            return "retry"
 
         self.ui.show_transcribing()
 

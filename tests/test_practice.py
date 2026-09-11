@@ -1,6 +1,6 @@
 """Tests for practice module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -367,3 +367,31 @@ class TestPracticeManager:
 
         assert result == "retry"
         mock_ui.show_error.assert_called_once_with("Device busy")
+
+    def test_paragraph_recording_does_not_transcribe_when_finalization_fails(
+        self,
+        mock_config,
+        mock_recorder,
+        mock_transcriber,
+        mock_ui,
+        mock_history,
+        mock_lesson_manager,
+    ):
+        """Practice retries instead of scoring an incomplete WAV file."""
+        manager = PracticeManager(
+            mock_config,
+            mock_recorder,
+            mock_transcriber,
+            mock_ui,
+            mock_history,
+            mock_lesson_manager,
+        )
+        mock_recorder.stop_recording.return_value = False
+        manager._run_progress = MagicMock()
+        lesson = MagicMock(title="Lesson")
+
+        result = manager._run_paragraph_recording(lesson, "Text", 10, 1, 1, 1)
+
+        assert result == "retry"
+        mock_transcriber.transcribe_streaming.assert_not_called()
+        mock_ui.show_error.assert_called_once_with("Failed to finalize recording")

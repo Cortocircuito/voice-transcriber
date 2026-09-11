@@ -68,7 +68,11 @@ class DictationManager:
             try:
                 self._run_progress(self.config.duration)
             finally:
-                self.recorder.stop_recording()
+                recording_stopped = self.recorder.stop_recording()
+
+            if not recording_stopped:
+                self.ui.show_error("Failed to finalize recording")
+                return
 
             self.ui.show_transcribing()
 

@@ -2,6 +2,8 @@
 
 import io
 import subprocess
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -509,7 +511,7 @@ class TestRecorderErrorHandling:
         file_handle.seek.side_effect = OSError("disk failure")
         recorder._audio_file_handle = file_handle
 
-        assert recorder.stop_recording() is True
+        assert recorder.stop_recording() is False
 
         file_handle.close.assert_called_once()
         assert recorder._audio_file_handle is None
@@ -552,7 +554,8 @@ class TestRecorderErrorHandling:
         recorder = Recorder(device="default")
         process = MagicMock()
         process.stdout = io.BytesIO(b"\x01\x00\x02\x00")
-        audio_file = io.BytesIO()
+        audio_file = MagicMock()
+        audio_file.tell.return_value = 48
         recorder._process = process
         recorder._audio_file_handle = audio_file
         recorder._monitoring = False
@@ -560,7 +563,71 @@ class TestRecorderErrorHandling:
 
         recorder._read_audio_stream()
 
-        assert audio_file.getvalue() == b"\x01\x00\x02\x00"
+        audio_file.write.assert_any_call(b"\x01\x00\x02\x00")
+
+    def test_stop_recording_fails_when_reader_cannot_write_audio(self):
+        """A partial WAV is rejected when its reader encounters an I/O error."""
+        recorder = Recorder(device="default")
+        process = MagicMock()
+        process.stdout = io.BytesIO(b"\x01\x00")
+        audio_file = MagicMock()
+        audio_file.write.side_effect = OSError("disk failure")
+        audio_file.tell.return_value = 44
+        recorder._process = process
+        recorder._audio_file_handle = audio_file
+        recorder._monitoring = True
+        recorder._read_audio_stream()
+        recorder._level_monitor_thread = MagicMock()
+        recorder._level_monitor_thread.is_alive.return_value = False
+
+        assert recorder.stop_recording() is False
+
+    def test_stop_recording_returns_without_waiting_for_blocked_reader(self):
+        """A blocked audio write cannot make recorder shutdown hang."""
+        recorder = Recorder(device="default")
+        write_started = threading.Event()
+        release_write = threading.Event()
+
+        class BlockingAudioFile:
+            def __init__(self) -> None:
+                self._block_next_write = True
+                self.closed = False
+
+            def write(self, data: bytes) -> None:
+                if self._block_next_write:
+                    self._block_next_write = False
+                    write_started.set()
+                    release_write.wait(timeout=5)
+
+            def tell(self) -> int:
+                return 48
+
+            def seek(self, offset: int) -> None:
+                pass
+
+            def close(self) -> None:
+                self.closed = True
+
+        process = MagicMock()
+        process.poll.return_value = None
+        process.stdout = io.BytesIO(b"\x01\x00\x02\x00")
+        audio_file = BlockingAudioFile()
+        recorder._process = process
+        recorder._audio_file_handle = audio_file
+        recorder._monitoring = True
+        reader = threading.Thread(target=recorder._read_audio_stream)
+        recorder._level_monitor_thread = reader
+        reader.start()
+        assert write_started.wait(timeout=2)
+
+        start_time = time.monotonic()
+        assert recorder.stop_recording() is False
+        assert time.monotonic() - start_time < 1.5
+
+        release_write.set()
+        reader.join(timeout=2)
+        assert not reader.is_alive()
+        assert audio_file.closed
 
 
 class TestTranscriberErrorHandling:

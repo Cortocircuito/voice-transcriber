@@ -43,3 +43,18 @@ def test_run_returns_when_recording_start_fails(manager: DictationManager) -> No
 
     manager.transcriber.transcribe_streaming.assert_not_called()
     manager.ui.show_error.assert_called_once_with("Device busy")
+
+
+def test_run_does_not_transcribe_when_recording_finalization_fails(
+    manager: DictationManager,
+) -> None:
+    """An incomplete WAV file must not be sent to Whisper."""
+    manager.recorder.check_microphone.return_value = (True, 0.5)
+    manager.recorder.start_recording.return_value = "/tmp/test.wav"
+    manager.recorder.stop_recording.return_value = False
+    manager._run_progress = MagicMock()
+
+    manager.run()
+
+    manager.transcriber.transcribe_streaming.assert_not_called()
+    manager.ui.show_error.assert_called_once_with("Failed to finalize recording")

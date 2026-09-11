@@ -139,7 +139,9 @@ class Recorder:
         self._monitoring: bool = False
         self._draining_audio: bool = False
         self._audio_file_handle: Optional[BinaryIO] = None
-        self._audio_lock = threading.Lock()
+        self._finalization_succeeded: Optional[bool] = None
+        self._reader_succeeded: bool = True
+        self._discard_after_reader: bool = False
 
     def check_arecord_available(self) -> bool:
         """Check if arecord command is available."""
@@ -297,6 +299,9 @@ class Recorder:
 
             self._monitoring = True
             self._draining_audio = False
+            self._finalization_succeeded = None
+            self._reader_succeeded = True
+            self._discard_after_reader = False
             self._current_level = 0.0
             self._level_monitor_thread = threading.Thread(
                 target=self._read_audio_stream,
@@ -357,28 +362,25 @@ class Recorder:
         """Read audio from arecord stdout, write to file, calculate levels."""
         import struct
 
-        if not self._process or not self._audio_file_handle:
-            return
+        process = self._process
+        try:
+            if not process or not self._audio_file_handle:
+                return
 
-        if not self._process.stdout:
-            return
+            if not process.stdout:
+                return
 
-        chunk_size = 3200
-        stdout = self._process.stdout
+            chunk_size = 3200
+            stdout = process.stdout
 
-        while self._monitoring or self._draining_audio:
-            try:
+            while self._monitoring or self._draining_audio:
                 data = stdout.read(chunk_size)
-                if not data:
+                if not isinstance(data, bytes) or not data:
                     break
 
-                with self._audio_lock:
-                    if (
-                        not (self._monitoring or self._draining_audio)
-                        or not self._audio_file_handle
-                    ):
-                        break
-                    self._audio_file_handle.write(data)
+                if not self._audio_file_handle:
+                    break
+                self._audio_file_handle.write(data)
 
                 if len(data) >= 2:
                     samples = struct.unpack(
@@ -387,9 +389,59 @@ class Recorder:
                     if samples:
                         max_sample = max(abs(s) for s in samples)
                         self._current_level = min(1.0, max_sample / 32768.0)
-            except Exception as e:
-                logger.debug(f"Error reading audio stream: {e}")
-                break
+        except Exception as e:
+            logger.debug(f"Error reading audio stream: {e}")
+            self._reader_succeeded = False
+        finally:
+            self._finalization_succeeded = (
+                self._reader_succeeded and self._finalize_audio_file()
+            )
+            if self._discard_after_reader:
+                self._remove_audio_file()
+            if process and process.stdout:
+                try:
+                    process.stdout.close()
+                except OSError as e:
+                    logger.debug("Failed to close arecord output: %s", e)
+            if self._process is process:
+                self._process = None
+
+    def _finalize_audio_file(self) -> bool:
+        """Update and close the WAV file after its reader has stopped."""
+        audio_file = self._audio_file_handle
+        self._audio_file_handle = None
+        if not audio_file:
+            return True
+
+        success = True
+        try:
+            data_size = max(0, audio_file.tell() - 44)
+            self._update_wav_header(audio_file, data_size)
+        except OSError as e:
+            logger.warning("Failed to finalize recording: %s", e)
+            success = False
+        finally:
+            try:
+                audio_file.close()
+            except OSError as e:
+                logger.warning("Failed to close recording file: %s", e)
+                success = False
+
+        return success
+
+    def _remove_audio_file(self) -> None:
+        """Remove a recording that cannot be safely transcribed."""
+        audio_path = self._audio_path
+        self._audio_path = None
+        if not audio_path:
+            return
+
+        try:
+            os.unlink(audio_path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Failed to remove recording %s: %s", audio_path, e)
 
     def _stop_level_monitoring(self) -> bool:
         """Wait briefly for the audio reader to finish draining the pipe."""
@@ -435,48 +487,46 @@ class Recorder:
     def _discard_recording(self, audio_path: str) -> None:
         """Stop a failed recording attempt and remove its partial file."""
         try:
-            self.stop_recording()
+            if not self.stop_recording():
+                return
         except Exception as e:
             logger.warning("Failed to stop partial recording %s: %s", audio_path, e)
-        finally:
-            try:
-                os.unlink(audio_path)
-            except FileNotFoundError:
-                pass
-            except OSError as e:
-                logger.warning(
-                    "Failed to remove partial recording %s: %s", audio_path, e
-                )
+        if self._audio_path == audio_path:
+            self._remove_audio_file()
+            return
+
+        try:
+            os.unlink(audio_path)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Failed to remove recording %s: %s", audio_path, e)
 
     def stop_recording(self) -> bool:
         """Stop recording and finalize WAV file."""
-        self._monitoring = False
         self._draining_audio = True
+        self._monitoring = False
         process = self._stop_process()
         reader_stopped = self._stop_level_monitoring()
+
+        if not reader_stopped:
+            self._discard_after_reader = True
+            return False
+
         self._draining_audio = False
-        self._process = None
 
-        if reader_stopped and process and process.stdout:
-            try:
-                process.stdout.close()
-            except OSError as e:
-                logger.debug("Failed to close arecord output: %s", e)
-
-        with self._audio_lock:
-            if self._audio_file_handle:
-                audio_file = self._audio_file_handle
+        if self._finalization_succeeded is None:
+            self._finalization_succeeded = self._finalize_audio_file()
+            if process and process.stdout:
                 try:
-                    data_size = max(0, audio_file.tell() - 44)
-                    self._update_wav_header(audio_file, data_size)
+                    process.stdout.close()
                 except OSError as e:
-                    logger.warning("Failed to finalize recording: %s", e)
-                finally:
-                    try:
-                        audio_file.close()
-                    except OSError as e:
-                        logger.warning("Failed to close recording file: %s", e)
-                    self._audio_file_handle = None
+                    logger.debug("Failed to close arecord output: %s", e)
+            self._process = None
+
+        if not self._finalization_succeeded:
+            self._remove_audio_file()
+            return False
 
         self._audio_path = None
         return True
@@ -534,7 +584,8 @@ class Recorder:
             if not progress_callback:
                 print()
 
-            self.stop_recording()
+            if not self.stop_recording():
+                return None
 
             if os.path.getsize(audio_path) < 1000:
                 return None
