@@ -137,6 +137,7 @@ class Recorder:
         self._level_monitor_thread: Optional[threading.Thread] = None
         self._current_level: float = 0.0
         self._monitoring: bool = False
+        self._draining_audio: bool = False
         self._audio_file_handle: Optional[BinaryIO] = None
         self._audio_lock = threading.Lock()
 
@@ -261,10 +262,16 @@ class Recorder:
                 "arecord not found. Please install ALSA utilities (sudo apt install alsa-utils)"
             )
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            audio_path = f.name
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                audio_path = f.name
+        except OSError as e:
+            raise RecorderError(f"Failed to create temporary audio file: {e}") from e
 
         try:
+            if self._level_monitor_thread and self._level_monitor_thread.is_alive():
+                raise RecorderError("Previous recording is still shutting down")
+            self._level_monitor_thread = None
             self._process = subprocess.Popen(
                 [
                     "arecord",
@@ -289,6 +296,7 @@ class Recorder:
             self._write_wav_header(self._audio_file_handle)
 
             self._monitoring = True
+            self._draining_audio = False
             self._current_level = 0.0
             self._level_monitor_thread = threading.Thread(
                 target=self._read_audio_stream,
@@ -358,14 +366,17 @@ class Recorder:
         chunk_size = 3200
         stdout = self._process.stdout
 
-        while self._monitoring and self._process.poll() is None:
+        while self._monitoring or self._draining_audio:
             try:
                 data = stdout.read(chunk_size)
                 if not data:
                     break
 
                 with self._audio_lock:
-                    if not self._monitoring or not self._audio_file_handle:
+                    if (
+                        not (self._monitoring or self._draining_audio)
+                        or not self._audio_file_handle
+                    ):
                         break
                     self._audio_file_handle.write(data)
 
@@ -380,20 +391,32 @@ class Recorder:
                 logger.debug(f"Error reading audio stream: {e}")
                 break
 
-    def _stop_level_monitoring(self):
-        """Stop the audio level monitoring thread."""
-        self._monitoring = False
-        if self._level_monitor_thread:
-            self._level_monitor_thread.join(timeout=1)
-            self._level_monitor_thread = None
+    def _stop_level_monitoring(self) -> bool:
+        """Wait briefly for the audio reader to finish draining the pipe."""
+        thread = self._level_monitor_thread
+        if not thread:
+            return True
 
-    def _stop_process(self) -> None:
+        try:
+            thread.join(timeout=1)
+        except RuntimeError:
+            # Thread construction succeeded but start() failed.
+            self._level_monitor_thread = None
+            return True
+
+        if thread.is_alive():
+            logger.warning("Audio reader did not stop within one second")
+            return False
+
+        self._level_monitor_thread = None
+        return True
+
+    def _stop_process(self) -> Optional[subprocess.Popen]:
         """Stop arecord without allowing a stuck process to block shutdown."""
         process = self._process
-        self._process = None
 
         if not process:
-            return
+            return None
 
         try:
             if process.poll() is None:
@@ -406,35 +429,54 @@ class Recorder:
                     process.wait(timeout=2)
         except (OSError, subprocess.TimeoutExpired) as e:
             logger.warning("Failed to stop arecord: %s", e)
-        finally:
-            if process.stdout:
-                try:
-                    process.stdout.close()
-                except OSError as e:
-                    logger.debug("Failed to close arecord output: %s", e)
+
+        return process
 
     def _discard_recording(self, audio_path: str) -> None:
         """Stop a failed recording attempt and remove its partial file."""
-        self.stop_recording()
         try:
-            os.unlink(audio_path)
-        except FileNotFoundError:
-            pass
-        except OSError as e:
-            logger.warning("Failed to remove partial recording %s: %s", audio_path, e)
+            self.stop_recording()
+        except Exception as e:
+            logger.warning("Failed to stop partial recording %s: %s", audio_path, e)
+        finally:
+            try:
+                os.unlink(audio_path)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                logger.warning(
+                    "Failed to remove partial recording %s: %s", audio_path, e
+                )
 
     def stop_recording(self) -> bool:
         """Stop recording and finalize WAV file."""
         self._monitoring = False
-        self._stop_process()
-        self._stop_level_monitoring()
+        self._draining_audio = True
+        process = self._stop_process()
+        reader_stopped = self._stop_level_monitoring()
+        self._draining_audio = False
+        self._process = None
+
+        if reader_stopped and process and process.stdout:
+            try:
+                process.stdout.close()
+            except OSError as e:
+                logger.debug("Failed to close arecord output: %s", e)
 
         with self._audio_lock:
             if self._audio_file_handle:
-                data_size = max(0, self._audio_file_handle.tell() - 44)
-                self._update_wav_header(self._audio_file_handle, data_size)
-                self._audio_file_handle.close()
-                self._audio_file_handle = None
+                audio_file = self._audio_file_handle
+                try:
+                    data_size = max(0, audio_file.tell() - 44)
+                    self._update_wav_header(audio_file, data_size)
+                except OSError as e:
+                    logger.warning("Failed to finalize recording: %s", e)
+                finally:
+                    try:
+                        audio_file.close()
+                    except OSError as e:
+                        logger.warning("Failed to close recording file: %s", e)
+                    self._audio_file_handle = None
 
         self._audio_path = None
         return True

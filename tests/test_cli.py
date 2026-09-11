@@ -177,6 +177,28 @@ class TestCLI:
 
             mock_recorder.return_value.stop_recording.assert_called_once()
 
+    def test_cleanup_saves_history_when_recorder_stopping_fails(
+        self, mock_config, mock_history
+    ):
+        """Recorder cleanup errors do not prevent history persistence."""
+        with (
+            patch("voice_to_text.cli.Recorder") as mock_recorder,
+            patch("voice_to_text.cli.Transcriber"),
+            patch("voice_to_text.cli.UI") as mock_ui,
+            patch("voice_to_text.cli.LessonManager"),
+        ):
+            mock_recorder.return_value.stop_recording.side_effect = OSError(
+                "disk failure"
+            )
+            mock_ui_instance = MagicMock()
+            mock_ui_instance.console = MagicMock()
+            mock_ui.return_value = mock_ui_instance
+
+            cli = CLI(mock_config)
+            cli._cleanup()
+
+            mock_history.save.assert_called_once()
+
     def test_cleanup_is_idempotent(self, mock_config, mock_history):
         """Calling cleanup twice saves history only once."""
         mock_history.get_entries = MagicMock(return_value=[{"text": "test"}])

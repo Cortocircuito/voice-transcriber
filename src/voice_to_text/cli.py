@@ -93,14 +93,25 @@ class CLI:
         self._cleaned_up = True
         # Stop any background lesson download so its worker thread does not
         # keep the interpreter alive at exit.
-        self.recorder.stop_recording()
-        self.lesson_manager.shutdown()
-        entries = self.history.get_entries()
-        if entries:
-            self.ui.console.print(
-                f"\n[dim]{get_text('history_saved', self.config.ui_language)}...[/dim]"
-            )
-        self.history.save()
+        try:
+            self.recorder.stop_recording()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to stop recorder: %s", e)
+
+        try:
+            self.lesson_manager.shutdown()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to stop lesson manager: %s", e)
+
+        try:
+            entries = self.history.get_entries()
+            if entries:
+                self.ui.console.print(
+                    f"\n[dim]{get_text('history_saved', self.config.ui_language)}...[/dim]"
+                )
+            self.history.save()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to save history: %s", e)
 
     def _signal_handler(self, signum, frame):
         self.recorder.interrupt()

@@ -1,5 +1,6 @@
 """Tests for voice_to_text package."""
 
+import io
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -499,6 +500,67 @@ class TestRecorderErrorHandling:
         process.terminate.assert_called_once()
         process.kill.assert_called_once()
         assert process.wait.call_count == 2
+
+    def test_stop_recording_closes_file_after_header_update_fails(self):
+        """WAV finalization failures must not leak the recording file handle."""
+        recorder = Recorder(device="default")
+        file_handle = MagicMock()
+        file_handle.tell.return_value = 44
+        file_handle.seek.side_effect = OSError("disk failure")
+        recorder._audio_file_handle = file_handle
+
+        assert recorder.stop_recording() is True
+
+        file_handle.close.assert_called_once()
+        assert recorder._audio_file_handle is None
+
+    def test_discard_recording_removes_file_when_stopping_fails(self):
+        """A failed recorder teardown cannot leave a temporary WAV behind."""
+        recorder = Recorder(device="default")
+
+        with (
+            patch.object(
+                recorder, "stop_recording", side_effect=OSError("disk failure")
+            ),
+            patch("voice_to_text.recorder.os.unlink") as mock_unlink,
+        ):
+            recorder._discard_recording("/tmp/partial.wav")
+
+        mock_unlink.assert_called_once_with("/tmp/partial.wav")
+
+    def test_stop_recording_closes_stdout_after_reader_stops(self):
+        """The process stream is not closed while its reader could hold it."""
+        recorder = Recorder(device="default")
+        events = []
+        process = MagicMock()
+        process.poll.return_value = None
+        process.terminate.side_effect = lambda: events.append("terminate")
+        process.wait.side_effect = lambda timeout: events.append("wait")
+        process.stdout.close.side_effect = lambda: events.append("stdout_close")
+        thread = MagicMock()
+        thread.join.side_effect = lambda timeout: events.append("join")
+        thread.is_alive.return_value = False
+        recorder._process = process
+        recorder._level_monitor_thread = thread
+
+        recorder.stop_recording()
+
+        assert events.index("join") < events.index("stdout_close")
+
+    def test_reader_drains_buffered_audio_after_recording_stops(self):
+        """Audio already in the pipe is retained during recorder shutdown."""
+        recorder = Recorder(device="default")
+        process = MagicMock()
+        process.stdout = io.BytesIO(b"\x01\x00\x02\x00")
+        audio_file = io.BytesIO()
+        recorder._process = process
+        recorder._audio_file_handle = audio_file
+        recorder._monitoring = False
+        recorder._draining_audio = True
+
+        recorder._read_audio_stream()
+
+        assert audio_file.getvalue() == b"\x01\x00\x02\x00"
 
 
 class TestTranscriberErrorHandling:
