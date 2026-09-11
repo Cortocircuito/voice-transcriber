@@ -11,6 +11,7 @@ TRANSLATIONS = {
     "menu_language": "Language",
     "recording": "RECORDING",
     "speak_now": "SPEAK NOW!",
+    "press_enter_stop": "Press Enter to stop early.",
     "transcribing": "Transcribing",
     "transcription": "TRANSCRIPTION",
     "no_audio": "No audio detected",

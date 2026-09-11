@@ -2,6 +2,7 @@
 
 import re
 import time
+from math import ceil
 from pathlib import Path
 
 from rich.console import Console, Group
@@ -67,7 +68,7 @@ class DictationManager:
                 continue
 
             try:
-                self._run_progress(self.config.duration)
+                recorded_duration = self._run_progress(self.config.duration)
             finally:
                 recording_stopped = self.recorder.stop_recording()
 
@@ -90,7 +91,7 @@ class DictationManager:
             if success and text.strip():
                 self.history.add_entry(
                     language=self.config.language,
-                    duration=self.config.duration,
+                    duration=recorded_duration,
                     text=text,
                 )
 
@@ -182,8 +183,8 @@ class DictationManager:
             get_text("transcription_saved", self.config.ui_language).format(path=path)
         )
 
-    def _run_progress(self, duration: int) -> None:
-        """Run progress bar for recording with real-time audio level."""
+    def _run_progress(self, duration: int) -> int:
+        """Run recording progress and return the elapsed duration in seconds."""
         lang = self.config.ui_language
         lang_label = get_language_label(self.config.language, lang)
 
@@ -199,7 +200,7 @@ class DictationManager:
         )
 
         def generate_display():
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             progress.update(task, completed=min(int(elapsed), duration))
 
             level = self.recorder.get_audio_level()
@@ -220,9 +221,14 @@ class DictationManager:
 
             return Group(progress, level_display)
 
-        start_time = time.time()
+        start_time = time.monotonic()
         with Live(generate_display(), refresh_per_second=10, console=console) as live:
-            while time.time() - start_time < duration:
+            while True:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= duration:
+                    return duration
+                if self.ui.recording_stop_requested():
+                    return max(1, ceil(elapsed))
                 live.update(generate_display())
                 time.sleep(0.1)
 

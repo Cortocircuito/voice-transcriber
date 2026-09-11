@@ -1,6 +1,7 @@
 """UI components for voice-to-text using Rich library."""
 
 import signal
+import select
 import sys
 import time
 from typing import Any, Callable, Optional, Union
@@ -144,8 +145,28 @@ class UI:
         content = Text()
         content.append(f"\n  {get_text('recording', lang)}\n", style="bold red")
         content.append(f"\n  {get_text('speak_now', lang)}\n", style="bold yellow")
+        content.append(f"  {get_text('press_enter_stop', lang)}\n", style="dim")
         self.console.print()
         self.console.print(self._create_panel(content, border_style="red"))
+
+    def recording_stop_requested(self) -> bool:
+        """Return whether Enter was pressed while a recording is in progress."""
+        if not sys.stdin.isatty():
+            return False
+
+        try:
+            readable, _, _ = select.select([sys.stdin], [], [], 0)
+        except (OSError, TypeError, ValueError):
+            return False
+
+        if not readable:
+            return False
+
+        try:
+            sys.stdin.readline()
+        except (OSError, UnicodeError):
+            return False
+        return True
 
     def show_progress(self, duration: int, mic_level: Optional[float] = None):
         """Show recording progress with countdown."""

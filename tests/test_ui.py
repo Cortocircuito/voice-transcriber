@@ -390,3 +390,33 @@ class TestUI:
             ui = UI(mock_config)
 
             assert ui.export_text("Hello world") is False
+
+    def test_recording_stop_requested_consumes_enter(self, mock_config):
+        """An available terminal line stops the active recording."""
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin") as stdin,
+            patch("voice_to_text.ui.select.select", return_value=([stdin], [], [])),
+        ):
+            stdin.isatty.return_value = True
+            ui = UI(mock_config)
+
+            assert ui.recording_stop_requested() is True
+
+        stdin.readline.assert_called_once()
+
+    def test_recording_stop_requested_ignores_non_interactive_input(self, mock_config):
+        """Piped input must not automatically end a recording."""
+        with (
+            patch("voice_to_text.ui.Console"),
+            patch("voice_to_text.ui.signal"),
+            patch("voice_to_text.ui.sys.stdin") as stdin,
+            patch("voice_to_text.ui.select.select") as mock_select,
+        ):
+            stdin.isatty.return_value = False
+            ui = UI(mock_config)
+
+            assert ui.recording_stop_requested() is False
+
+        mock_select.assert_not_called()

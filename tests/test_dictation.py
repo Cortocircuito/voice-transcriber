@@ -146,3 +146,17 @@ def test_run_exits_cleanly_when_plain_text_export_fails(
 
     manager.ui.export_text.assert_called_once_with("Hello world")
     assert manager.ui.show_actions.call_count == 1
+
+
+def test_run_saves_early_stop_duration_in_history(manager: DictationManager) -> None:
+    """History reflects the time recorded when Enter stops dictation early."""
+    manager.recorder.check_microphone.return_value = (True, 0.5)
+    manager.recorder.start_recording.return_value = "/tmp/test.wav"
+    manager.recorder.stop_recording.return_value = True
+    manager.transcriber.transcribe_streaming.return_value = (True, "Hello world")
+    manager.ui.show_actions.return_value = "s"
+    manager._run_progress = MagicMock(return_value=4)
+
+    manager.run()
+
+    assert manager.history.add_entry.call_args.kwargs["duration"] == 4

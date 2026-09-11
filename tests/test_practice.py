@@ -395,3 +395,29 @@ class TestPracticeManager:
         assert result == "retry"
         mock_transcriber.transcribe_streaming.assert_not_called()
         mock_ui.show_error.assert_called_once_with("Failed to finalize recording")
+
+    def test_paragraph_recording_saves_early_stop_duration(
+        self,
+        mock_config,
+        mock_recorder,
+        mock_transcriber,
+        mock_ui,
+        mock_history,
+        mock_lesson_manager,
+    ):
+        """Practice history stores the duration from an Enter-stopped recording."""
+        manager = PracticeManager(
+            mock_config,
+            mock_recorder,
+            mock_transcriber,
+            mock_ui,
+            mock_history,
+            mock_lesson_manager,
+        )
+        manager._run_progress = MagicMock(return_value=4)
+        mock_ui.console.input.return_value = "s"
+        lesson = MagicMock(title="Lesson")
+
+        assert manager._run_paragraph_recording(lesson, "Text", 10, 1, 1, 1) == "exit"
+
+        assert mock_history.add_entry.call_args.kwargs["duration"] == 4
