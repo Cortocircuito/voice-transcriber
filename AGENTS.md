@@ -1,363 +1,143 @@
-# AGENTS.md - Guidelines for AI Agents
+# Developer and Agent Guide
 
-This file provides guidelines for AI agents working on this codebase.
+Shared instructions for contributors and coding agents. See [README.md](README.md)
+for installation, user-facing features, configuration paths, and troubleshooting.
+Keep those instructions there rather than duplicating them in agent-specific files.
 
-## Project Overview
+## Development setup and commands
 
-Voice-to-text is a Python CLI application for speech transcription using faster-whisper. It provides an interactive terminal UI for dictation and lesson practice modes.
-
-## Build, Lint, and Test Commands
-
-### Running Tests
+Run from the repository root with Python 3.10+:
 
 ```bash
-# Run all tests
-pytest
-
-# Run a single test file
-pytest tests/test_config.py
-
-# Run a single test
-pytest tests/test_config.py::TestConfig::test_default_values
-
-# Run with coverage
-pytest --cov=src/voice_to_text --cov-report=term-missing
-```
-
-### Linting and Formatting
-
-```bash
-# Run ruff linter
-ruff check src/
-
-# Run ruff with auto-fix
-ruff check src/ --fix
-
-# Run black formatter
-black src/
-
-# Run isort import sorter
-isort src/
-
-# Run mypy type checker
-mypy src/
-
-# Run all pre-commit hooks
-pre-commit run --all-files
-```
-
-### Running the Application
-
-#### Installation Methods
-
-There are three main installation methods. Choose based on your use case:
-
-**Option 3 (Recommended for users):** User Install
-```bash
-# Install for current user only (avoids externally-managed environment restrictions)
-pip install -e . --user
-
-# Update to new version
-pip install -e . --user --force-reinstall
-
-# Uninstall
-pip uninstall voice-to-text
-
-# Run
-voice-to-text
-```
-
-**Option 2 (Recommended for system isolation):** pipx
-```bash
-# Install with pipx (creates isolated environment)
-pipx install -e /path/to/voz_a_texto
-
-# Update to new version
-pipx reinstall voice-to-text
-
-# Uninstall
-pipx uninstall voice-to-text
-
-# Run
-voice-to-text
-```
-
-**Option 1 (Best for development):** Virtual Environment
-```bash
-# Create and activate venv
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
-
-# Install
-pip install -e .
-
-# Update to new version
-pip install -e . --force-reinstall
-
-# Uninstall
-deactivate && rm -rf venv
-
-# Run (requires activation)
-voice-to-text
-```
-
-#### Development Setup
-
-For development, use Option 1 with dev dependencies:
-
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -e ".[dev]"
-pre-commit install
-```
-
-Then run the CLI:
-```bash
-voice-to-text
-
-# Or run directly without installation
+python -m pip install -e ".[dev]"
 python -m voice_to_text
 ```
 
-#### Clipboard Troubleshooting (pyperclip)
-
-The application uses `pyperclip` for the copy-to-clipboard feature (`[C]` menu option). This relies on system clipboard tools:
-
-**Required system dependencies:**
-- **Wayland** (Ubuntu 24.04+): `wl-clipboard` (provides `wl-copy`, `wl-paste`)
-- **X11**: `xclip` or `xsel`
-
-**Common issues:**
-
-1. **"Clipboard not available" error**: Clipboard tool not installed
-   - Install appropriate tool: `sudo apt-get install wl-clipboard` (Wayland) or `sudo apt-get install xclip` (X11)
-
-2. **Works in venv but not with installed command**: Environment variable difference
-   - Ensure venv is activated: `source venv/bin/activate`
-   - For user install, ensure `~/.local/bin` is in PATH
-
-3. **pyperclip can't find clipboard tool**: PATH or environment issue
-   - Check tool is installed: `which wl-copy` or `which xclip`
-   - Verify display server: `echo $XDG_SESSION_TYPE`
-   - Option 2 (pipx) typically handles this best due to proper environment isolation
-
-## Code Style Guidelines
-
-### General Rules
-
-- **Line length**: 88 characters (configured in black/ruff)
-- **Python version**: 3.10+
-- **Type hints**: Use type hints for all function signatures
-- **Docstrings**: Use Google-style docstrings for public functions
-
-### Import Organization
-
-Organize imports in the following order (use isort to enforce):
-
-1. Standard library imports
-2. Third-party imports
-3. Local application imports
-
-Within each group, alphabetize by module name.
-
-```python
-# Correct
-import logging
-import os
-from typing import Optional
-
-from rich.console import Console
-
-from voice_to_text.config import Config
-from voice_to_text.ui import UI
-```
-
-### Naming Conventions
-
-- **Modules**: `snake_case` (e.g., `my_module.py`)
-- **Classes**: `PascalCase` (e.g., `MyClass`)
-- **Functions/variables**: `snake_case` (e.g., `my_function`, `my_variable`)
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_DURATION`)
-- **Private methods**: prefix with `_` (e.g., `_private_method`)
-
-### Type Hints
-
-Always use type hints in function signatures:
-
-```python
-# Good
-def my_function(name: str, value: int) -> Optional[str]:
-    ...
-
-# Avoid
-def my_function(name, value):
-    ...
-```
-
-### Custom Exceptions
-
-Create custom exceptions inheriting from the appropriate base class:
-
-```python
-class RecorderError(Exception):
-    """Base exception for recorder errors."""
-    pass
-
-
-class MicrophoneNotFoundError(RecorderError):
-    """Raised when no microphone is found."""
-    pass
-```
-
-### Error Handling
-
-- Use specific exception types rather than catching generic `Exception`
-- Provide meaningful error messages
-- Use logging for errors that don't need to stop execution
-
-```python
-# Good
-try:
-    result = some_function()
-except ValueError as e:
-    logger.error(f"Invalid value: {e}")
-    return None
-```
-
-### Logging
-
-Use module-level loggers:
-
-```python
-logger = logging.getLogger(__name__)
-```
-
-Log levels:
-- `logger.debug()` - Detailed information for debugging
-- `logger.info()` - Confirmation that things work as expected
-- `logger.warning()` - Something unexpected happened, but continue
-- `logger.error()` - Serious problem, function couldn't perform task
-
-### Class Structure
-
-```python
-class MyClass:
-    """Short description of the class.
-
-    Longer description if needed.
-    """
-
-    def __init__(
-        self,
-        param1: str,
-        param2: int,
-        optional_param: Optional[str] = None,
-    ) -> None:
-        self.param1 = param1
-        self.param2 = param2
-        self.optional_param = optional_param
-
-    def public_method(self) -> str:
-        """Description of what this method does.
-
-        Returns:
-            Description of return value.
-        """
-        return "result"
-
-    def _private_method(self) -> None:
-        """Internal method, not part of public API."""
-        pass
-```
-
-### Dataclasses
-
-Use dataclasses for simple data containers:
-
-```python
-from dataclasses import dataclass
-
-
-@dataclass
-class MyDataClass:
-    name: str
-    value: int
-    optional_field: Optional[str] = None
-```
-
-### Testing Guidelines
-
-- Test files go in `tests/` directory
-- Name test files as `test_<module>.py`
-- Test classes named `Test<ModuleName>`
-- Test methods named `test_<description>`
-- Use descriptive test names that explain what is being tested
-
-```python
-class TestConfig:
-    def test_validate_duration_returns_value_when_valid(self):
-        config = Config()
-        assert config.validate_duration("30") == 30
-```
-
-### Rich Library Usage
-
-The project uses Rich for terminal UI. Key patterns:
-
-```python
-from rich.console import Console
-from rich.panel import Panel
-
-console = Console()
-
-# Print colored text
-console.print("[bold red]Error:[/bold red] Something went wrong")
-
-# Print a panel
-console.print(Panel(content, title="Title"))
-```
-
-### Configuration
-
-- All constants go in `src/voice_to_text/constants.py`
-- Config class uses dataclass in `src/voice_to_text/config.py`
-- Internationalization strings in `src/voice_to_text/i18n.py`
-
-## Pre-commit Hooks
-
-The project uses pre-commit. Install hooks with:
+Install the package first with this `src/` layout; `python -m voice_to_text` is an
+alternative entry point, not a way to skip installation. Use editable installation
+for development.
 
 ```bash
-pip install -e ".[dev]"
-pre-commit install
+# Tests
+pytest
+pytest tests/test_config.py
+pytest tests/test_config.py::TestConfig::test_default_values
+pytest --cov=src/voice_to_text --cov-report=term-missing
+
+# Non-modifying checks
+ruff check src/
+black --check src/
+isort --check-only src/
+mypy src/
+
+# Apply formatting / lint fixes when needed
+black src/
+isort src/
+ruff check src/ --fix
 ```
 
-Hooks include:
-- black (formatting)
-- isort (import sorting)
-- ruff (linting)
-- mypy (type checking)
-- bandit (security)
+Pre-commit is configured in `.pre-commit-config.yaml`, but is not included in the
+`dev` extra. Install it separately in the development environment:
 
-## Common Tasks
+```bash
+python -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
 
-### Adding a New Feature
+Hooks include Black, isort, Ruff, mypy, Bandit, and file hygiene checks. They can
+modify files; review the resulting diff. Tool settings and dependencies live in
+`pyproject.toml`; hook versions and hook-specific arguments live in the pre-commit
+configuration.
 
-1. Create feature branch
-2. Add code to appropriate module in `src/voice_to_text/`
-3. Add tests in `tests/`
-4. Run linters: `ruff check src/ && black src/ && mypy src/`
-5. Run tests: `pytest`
-6. Commit and push
+## Architecture
 
-### Adding Internationalization
+All application modules live in `src/voice_to_text/`.
 
-1. Add translation keys to `src/voice_to_text/i18n.py`
-2. Use `get_text("key", lang)` in code
+| Module | Responsibility |
+|--------|----------------|
+| `cli.py` | Composition root: wires dependencies, dispatches menus, loads models lazily, and handles shutdown |
+| `dictation.py` | Recording/transcription flow and dictation exports |
+| `practice.py` | Lesson reading, recording, comparison, and feedback |
+| `configurator.py` | Interactive settings management |
+| `config.py` | Configuration dataclass, validation, and JSON persistence |
+| `constants.py` | Shared limits, comparison defaults, and UI colors |
+| `recorder.py` | ALSA `arecord` subprocess, temporary WAV audio, levels, and recorder exceptions |
+| `transcriber.py` | faster-whisper model loading and transcription |
+| `comparison.py` | Text normalization, matching, scoring, and word-error mapping |
+| `phonetics.py` | English IPA hints using eng-to-ipa |
+| `lessons.py` | Breaking News English scraping, published-level discovery, caching, and background preloading |
+| `history.py` | Transcription history and persistence |
+| `ui.py` | Rich rendering, prompts, clipboard, and nonblocking Enter-to-stop listener |
+| `i18n.py` | English/Spanish UI strings and language labels |
 
-### Adding a New Dependency
+`CLI` injects dependencies into `DictationManager`, `PracticeManager`, and
+`ConfigManager`. Preserve constructor injection so tests can use mocks.
 
-1. Add to `dependencies` in `pyproject.toml`
-2. Run `pip install -e ".[dev]"` to update
-3. Update this AGENTS.md if adding a new tool/command
+Lesson downloads use a single-worker `ThreadPoolExecutor`. The CLI polls preload
+state and suppresses noisy loggers during background downloads. Preserve executor
+shutdown and idempotent cleanup when changing exit paths. Recording must be stopped
+and finalized successfully before audio is sent for transcription.
+
+### Text comparison
+
+The main ideas from the earlier improvement plan are implemented in `comparison.py`
+and covered by `tests/test_comparison.py`. The current behavior is described below,
+not the old proposal's API names or proposed configuration fields.
+
+- `compare_with_method()` dispatches according to `Config.comparison_method`.
+- `flexible` (default) searches around a moving transcript anchor, preferring
+  exact matches before optional phonetic matches. The default window is ±4 tokens
+  (`COMPARISON_WINDOW_SIZE`), not a configurable JSON field.
+- `per_word` matches word presence regardless of order, consuming each matched
+  transcript position once.
+- `legacy` uses sequential `difflib` alignment.
+- Normalization handles punctuation and English contractions. Preserve the mapping
+  from normalized tokens to displayed words so error highlighting stays aligned.
+- Simplified phonetic matching is a heuristic with safeguards for short words and
+  partial-word matches; it is distinct from the IPA hints in `phonetics.py`.
+- Scores are matched reference tokens divided by total reference tokens (0–1).
+  Missing and extra words are reported separately; this is not acoustic assessment.
+
+Only `comparison_method` is persisted as a comparison setting. Window size and
+phonetic matching can be supplied to comparison APIs, but are not additional
+settings in `Config`.
+
+## Coding conventions
+
+- Follow surrounding code; Python 3.10+, 88-character lines (Black/Ruff).
+- Use type hints on function signatures and Google-style public docstrings.
+- Use `snake_case` for modules/functions/variables, `PascalCase` for classes,
+  `UPPER_SNAKE_CASE` for constants, and `_` prefixes for private methods.
+- Sort imports with isort: standard library, third-party, then local imports.
+- Prefer dataclasses for simple data containers.
+- Use specific exceptions and meaningful messages; use existing recorder/history
+  exception types where appropriate. Avoid broad catches for routine failures.
+- Use module-level `logging.getLogger(__name__)`; keep diagnostic noise out of the
+  interactive Rich UI, especially during background work.
+- Put new shared constants in `constants.py`, configuration in `config.py`, and UI
+  text in `i18n.py` with both English and Spanish translations. Use
+  `get_text(key, lang)` instead of new hardcoded UI strings.
+- Reuse the injected UI/console rather than introducing additional global consoles.
+
+## Tests and change workflow
+
+- Create a focused feature/fix/docs branch for changes.
+- Keep tests in `tests/test_<module>.py`, classes named `Test<ModuleName>`, and
+  descriptive `test_<behavior>` methods. Add regression tests for behavior changes.
+- Preserve `tests/fixtures/breaking_news_homepage.md`: it is input data used by
+  `tests/test_lessons.py`, not obsolete documentation.
+- Run relevant tests and quality checks; report failures and unavailable tools
+  accurately. Documentation-only edits do not require recording audio or
+  downloading models/lessons.
+- Add dependencies to `pyproject.toml` and reinstall the development extra when
+  needed. Update these instructions if commands or architecture change.
+- Keep README user-facing; keep shared development guidance in this file.
+  Remove completed plans after retaining useful
+  current behavior here; Git history preserves the original design.
+- Use Conventional Commits prefixes (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`,
+  `chore:`, etc.). Do not add a `Co-Authored-By: Claude ...` trailer.
+- Do not commit or push without the user's request, and do not overwrite unrelated
+  work.
