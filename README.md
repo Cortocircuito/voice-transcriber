@@ -1,280 +1,155 @@
 # Voice to Text
 
-A Python CLI application for speech transcription using faster-whisper. Provides an interactive terminal UI for dictation and lesson practice modes.
+A Linux Python CLI for speech transcription with faster-whisper and an
+interactive terminal UI. Dictate text or practice reading lessons from
+[Breaking News English](https://breakingnewsenglish.com).
 
 ## Features
 
-- **Dictation Mode**: Record and transcribe your voice in real-time
-- **Lesson Practice**: Practice reading with lessons from Breaking News English (7 levels)
-- **Multiple Languages**: Support for English, Spanish, French, and German
-- **Model Options**: Choose from tiny, base, small, or medium Whisper models
-- **Text Comparison**: Compare your transcription with the original text
-- **Progress Tracking**: Visual progress bars during recording
-- **Smart Download**: Prompts to download lessons on first run with async background loading
-- **Quiet Mode**: Clean UI during lesson download with optional verbose logging in Practice mode
+- **Dictation:** record audio, then transcribe it; press Enter to stop early.
+- **Export:** copy a transcription, save it as `.txt` or `.md`, or print plain text.
+- **Lesson practice:** read articles at their published difficulty levels (0–6),
+  compare your transcription with the original, and see missing and extra words.
+- **Languages:** English, Spanish, French, and German transcription; English and
+  Spanish UI.
+- **Models:** tiny, base, small, and medium Whisper models.
+- **Offline lessons:** cached articles, background downloads, and manual refresh.
+- **Settings and history:** persisted locally between sessions.
 
 ## Requirements
 
-- Python 3.10+
-- Linux with ALSA audio (arecord)
-- Microphone
+- Python 3.10+, Linux, and a microphone.
+- ALSA `arecord` for recording (`alsa-utils` on Ubuntu/Debian).
+- Internet access for initial model downloads and fetching new lessons.
+- Optional system clipboard tool for copying text.
+
+On Ubuntu/Debian:
+
+```bash
+sudo apt install alsa-utils python3-venv pipx
+```
 
 ## Installation
 
-### Recommended: User Install (Option 3)
+Run these commands from a local checkout of this repository.
 
-This is the recommended method for end users. It avoids Python's externally-managed environment restrictions on Ubuntu 24.04+:
-
-```bash
-pip install -e . --user
-```
-
-**Update to new version:**
-```bash
-pip install -e . --user --force-reinstall
-```
-
-**Uninstall:**
-```bash
-pip uninstall voice-to-text
-```
-
-**Run:**
-```bash
-voice-to-text  # Command available globally from ~/.local/bin
-```
-
----
-
-### Alternative: pipx (Option 2)
-
-Best for system-wide isolation. Requires pipx installed:
+### For users: pipx
 
 ```bash
-sudo apt install pipx
-pipx install -e /path/to/voz_a_texto
-```
-
-**Update to new version:**
-```bash
-pipx reinstall voice-to-text
-```
-
-**Uninstall:**
-```bash
-pipx uninstall voice-to-text
-```
-
-**Run:**
-```bash
-voice-to-text  # Works globally
-```
-
----
-
-### Alternative: Virtual Environment (Option 1)
-
-Best for development. Requires manual environment activation:
-
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -e .
-```
-
-**Update to new version:**
-```bash
-source venv/bin/activate
-pip install -e . --force-reinstall
-```
-
-**Uninstall:**
-```bash
-deactivate
-rm -rf venv
-```
-
-**Run:**
-```bash
-source venv/bin/activate
+pipx ensurepath
+pipx install .
 voice-to-text
 ```
 
-Or add to PATH permanently in `~/.bashrc`:
-```bash
-export PATH="/path/to/voz_a_texto/venv/bin:$PATH"
-```
+After `pipx ensurepath`, you may need to reopen your terminal. After updating the
+checkout, reinstall with `pipx reinstall voice-to-text`. To uninstall:
+`pipx uninstall voice-to-text`.
 
----
-
-### With Development Dependencies
-
-If you want to contribute or run tests, install dev dependencies:
+### For development: virtual environment
 
 ```bash
-pip install -e ".[dev]" --user
-# Or with pipx:
-pipx install -e /path/to/voz_a_texto[dev]
-# Or with venv:
-source venv/bin/activate && pip install -e ".[dev]"
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -e ".[dev]"
+voice-to-text
 ```
 
-## System Dependencies
+Activate the environment in each new terminal. Editable installation means source
+changes take effect without reinstalling; rerun the install command when
+dependencies change. You can also launch with `python -m voice_to_text` after
+installation.
 
-### Linux (Ubuntu/Debian)
-
-For the copy-to-clipboard feature, you need a clipboard tool. This is required for the `[C] Copy original` menu option:
-
-**Wayland (default on Ubuntu 24.04+):**
-```bash
-sudo apt-get install wl-clipboard
-```
-
-**X11 (fallback):**
-```bash
-sudo apt-get install xclip
-```
-
-#### Clipboard Troubleshooting
-
-The application uses `pyperclip` to access the clipboard, which relies on external tools:
-- **Wayland**: Uses `wl-copy` and `wl-paste` from `wl-clipboard`
-- **X11**: Uses `xclip` or `xsel`
-
-**If the copy feature shows "Clipboard not available" error:**
-
-1. **Verify clipboard tool is installed:**
-   ```bash
-   which wl-copy     # For Wayland
-   which xclip       # For X11
-   ```
-
-2. **Check your display server:**
-   ```bash
-   echo $XDG_SESSION_TYPE  # Shows 'wayland' or 'x11'
-   ```
-
-3. **Installation method matters**: 
-   - If you used **Option 1 (venv)** without activating, `pyperclip` won't find system tools
-   - If you used **Option 3 (--user)** without proper PATH, command might not work
-   - **Option 2 (pipx)** typically handles this best as it creates an isolated environment with proper PATH configuration
-
-4. **Solution**: 
-   - Ensure clipboard tool is installed for your display server
-   - For venv: Always activate the environment before running
-   - For --user install: Ensure `~/.local/bin` is in your PATH
+Do not rely on `pip install --user` to bypass an `externally-managed-environment`
+error: distributions using PEP 668 may block that too. Use pipx or a virtual
+environment instead.
 
 ## Usage
 
-### Interactive Menu
-
 ```bash
-voice-to-text
-```
-
-On first run, if no lessons are cached, you'll be prompted to download lessons from Breaking News English. Lessons are downloaded asynchronously and available while you use the app.
-
-### Quick Start (Immediate Recording)
-
-```bash
-voice-to-text --quick
-```
-
-### With Custom Settings
-
-```bash
+voice-to-text                            # Interactive menu
+voice-to-text --quick                    # Skip menu and start dictation
 voice-to-text --duration 30 --language es
+voice-to-text --help
 ```
 
-### Command-Line Options
+The main menu offers **Record**, **Practice Reading**, **Configure**, and **Exit**.
+Recording stops at the configured duration or when you press Enter in an
+interactive terminal. Transcription starts after recording finishes; this is not
+live speech-to-text during capture.
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--duration` | Recording duration in seconds | 15 |
-| `--language` | Transcription language (en/es/fr/de) | en |
-| `--reading-speed` | Reading speed in WPM | 150 |
-| `--quick`, `-q` | Start recording immediately | false |
+### Command-line options
 
-## Menu Options
+| Option | Description | Default without saved settings |
+|--------|-------------|--------------------------------|
+| `--duration` | Recording duration, 1–300 seconds | 15 |
+| `--language` | Transcription language: `en`, `es`, `fr`, `de` | `en` |
+| `--reading-speed` | Reading speed, 20–300 WPM | 150 |
+| `--quick`, `-q` | Start dictation without the main menu | false |
 
-1. **Record** - Start dictation mode
-2. **Practice Reading** - Practice with lesson articles
-3. **Configure** - Change settings
-4. **Exit** - Quit application
+Explicit CLI values override saved settings at startup.
 
-## Lesson Practice
+### Dictation actions
 
-Lessons are fetched from [Breaking News English](https://breakingnewsenglish.com) and include:
+After transcription, use the action menu to:
 
-- **7 Difficulty Levels**: From level 0 (easiest) to level 6 (hardest)
-- **Smart Filtering**: Automatically filters out invalid/error content
-- **Offline Support**: Lessons are cached locally for offline use
-- **Refresh**: Option to refresh and fetch latest lessons
+- `[C]` copy the transcription to the clipboard.
+- `[W]` write a `.txt` or `.md` file (no extension defaults to `.txt`). Existing
+  files are never overwritten; the destination directory must already exist.
+- `[E]` print the transcription as plain text to standard output. This is an
+  interactive action, not a separate noninteractive export command.
 
-### Lesson Navigation
+### Lesson practice
 
-- `[1-N]` - Select a lesson
-- `[P]` / `[N]` - Previous/Next page
-- `[R]` - Refresh lessons
-- `[0]` - Back to main menu
+Opening **Practice Reading** prompts you to download lessons when none are cached,
+or to refresh an expired cache. Downloads run in the background; return to practice
+once they finish. You can keep using stale cached lessons if you decline a refresh.
+Only the levels published for each article are offered.
 
-## Configuration
+- `[1–N]`: select a lesson.
+- `[P]` / `[N]`: previous/next page.
+- `[R]`: refresh lessons.
+- `[0]`: return to the main menu.
 
-Settings can be configured via:
-- **Interactive menu**: Change settings during runtime
-- **Config file**: `~/.config/voice-to-text/config.json` (persists across sessions)
-- **CLI arguments**: Override settings per session
+Practice supports `flexible` (default), `per_word`, and `legacy` comparison methods.
+The score measures text matching, not an acoustic pronunciation assessment. See
+[comparison behavior](AGENTS.md#text-comparison) for implementation details.
 
-Configurable options:
-- Recording duration (1-300 seconds)
-- Transcription language
-- UI language
-- Whisper model size
-- Reading speed (words per minute)
-- Recording device
+## Configuration and local data
 
-## Development
+Use **Configure** to change recording duration, transcription language, model size,
+and reading speed, and confirm saving to persist changes. UI language
+(`ui_language`: `en`/`es`), recording device (`recording_device`), and comparison
+method (`comparison_method`: `flexible`/`per_word`/`legacy`) can be edited in
+`config.json`; they do not have interactive selectors.
 
-### Running Tests
+Local data lives in `${XDG_CONFIG_HOME:-~/.config}/voice-to-text/`:
+
+- `config.json`: saved settings.
+- `history.json`: transcription history.
+- `lessons/`: cached lesson content.
+
+## Clipboard troubleshooting
+
+Copying text uses `pyperclip` and requires a tool accessible on `PATH`:
 
 ```bash
-pytest
+sudo apt install wl-clipboard  # Wayland: wl-copy / wl-paste
+# Or, for X11:
+sudo apt install xclip        # xsel is also supported
 ```
 
-### Linting
+If copying fails, check `echo "$XDG_SESSION_TYPE"` and `command -v wl-copy`
+or `command -v xclip`. Run the app inside your graphical session so the clipboard
+tool can access the display. A Python virtual environment or pipx does not install
+these system tools or fix display-session permissions.
 
-```bash
-ruff check src/
-black src/
-mypy src/
-```
+## Development and documentation
 
-### Pre-commit Hooks
+[AGENTS.md](AGENTS.md) is the shared developer/agent guide: architecture, tests,
+quality checks, and coding conventions.
 
-```bash
-pip install -e ".[dev]"
-pre-commit install
-```
-
-## Project Structure
-
-```
-src/voice_to_text/
-├── cli.py           # Command-line interface
-├── comparison.py    # Transcription vs. lesson text diff/scoring
-├── config.py        # Configuration dataclass
-├── configurator.py  # Settings management
-├── constants.py     # Shared constants
-├── dictation.py     # Dictation mode
-├── history.py       # Transcription history
-├── i18n.py          # Internationalization
-├── lessons.py       # Lesson fetching & parsing
-├── phonetics.py     # IPA phonetic transcription
-├── practice.py      # Lesson practice mode
-├── recorder.py      # Audio recording
-├── transcriber.py   # Speech transcription
-└── ui.py            # Terminal UI
-```
+Source code is in `src/voice_to_text/`; tests and their input fixtures are in
+`tests/`. Markdown under `tests/fixtures/` is test data, not user documentation.
 
 ## License
 
